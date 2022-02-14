@@ -20,7 +20,8 @@ $ java -jar ./target/to8-font-converter-0.0.1-SNAPSHOT-jar-with-dependencies.jar
 
 ### Using in THOMSON
 
-- LOAD the RAW file at a specified address, for example $6500
+- LOAD the RAW file at a specified address, for example $6500 (with LOADM or custom disk operation)
+
 - Then change PTGENE pointer : 
 
 ```
