@@ -23,8 +23,8 @@ $ java -jar ./target/to8-font-converter-0.0.1-SNAPSHOT-jar-with-dependencies.jar
 - LOAD the RAW file at a specified address, for example $6500
 - Then change PTGENE pointer : 
 
-```asm
-	LDX #$6500   * target address of the new font
-        STX $60CF    * store this address at PTGENE :  $60CF
+```
+LDX #$6500   * target address of the new font
+STX $60CF    * store this address at PTGENE :  $60CF
 ```
 
