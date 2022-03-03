@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.ArrayUtils;
 
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +26,12 @@ public class MainCommand implements Runnable
 
 	@Option(names = { "-o", "--output" }, paramLabel = "Destination File", description = "Font File for Thomson")
 	File destFile;
+	
+	@Option(names = { "-b", "--binary" }, paramLabel = "Binary File ?", description = "Produce a THOMSON BIN Format, compatible with LOADM")
+	boolean isBinFormat;
+	
+	@Option(names = { "--org" }, paramLabel = "Org IMPL", description = "ORG address for the BIN generation")
+	String orgAddress;
 
 	public static void main(String[] args)
 	{
@@ -41,26 +49,56 @@ public class MainCommand implements Runnable
 	@Override
 	public void run()
 	{
-		log.info("Converting FNT file {}", fntFIle);
+		
+		
 		try (InputStream in = new FileInputStream(fntFIle); OutputStream out = new FileOutputStream(destFile))
 		{
+			
+			if (isBinFormat)
+			{
+				log.info("Generating BIN Format with address ${}", orgAddress); 
+				
+				byte[] decoded = Hex.decodeHex(orgAddress);
+				
+				// 0x3000 = 768 octets				
+				byte[] header = { 0x00, 0x03, 0x00, decoded[0], decoded[1]};
+			
+				
+				log.info("BIN Header : {}", Hex.encodeHexString(header));
+				
+				out.write(header);
+				
+			}
+			else
+			{
+				log.info("Generating RAW Format", orgAddress);
+			}
+			
+			log.info("Converting FNT file {} ...", fntFIle);
+			
 			for (int index = 0; index < 128; index++) // 128 chars composés de 8 octets
 			{
 				byte[] currentData = in.readNBytes(8); // on lit 8 octets
-				if (index >= 0x40 && index <= 0x5F)
-				{
-					log.info("Ignoring {}",index);
-				}
-				else
-				{
-					log.info("Converting char #{} : {}", index, (char) (0x20 + index));					
+				if (index < 0x40 || index > 0x5F)				
+				{			
 					ArrayUtils.reverse(currentData); // on les inverse
-					out.write(currentData); // on les écrits
+					out.write(currentData); // on les écrits													
 				}
 			}
-			log.info("File converted into {}", destFile);
+			
+			if (isBinFormat)
+			{			
+				
+				byte[] data = new byte[5]; // 8 bytes at 0x00
+				data[0] = (byte) 0xFF;
+				log.info("Writing BIN trailer : {}", Hex.encodeHexString(data));
+				out.write(data);
+			}
+			out.flush();
+			log.info("File is converted into {}", destFile);
+			log.info("File size : {} bytes", destFile.length());
 		}
-		catch (IOException e)
+		catch (IOException | DecoderException e)
 		{
 			log.error(e.getMessage());
 		}
