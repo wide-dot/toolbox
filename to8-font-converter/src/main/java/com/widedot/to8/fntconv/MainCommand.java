@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import picocli.CommandLine;
@@ -32,6 +33,9 @@ public class MainCommand implements Runnable
 	
 	@Option(names = { "--org" }, paramLabel = "Org IMPL", description = "ORG address for the BIN generation")
 	String orgAddress;
+	
+	@Option(names = { "--convert-only" }, paramLabel = "Char list", description = "Char list to convert")
+	String convertedChars;
 
 	public static void main(String[] args)
 	{
@@ -76,19 +80,32 @@ public class MainCommand implements Runnable
 			
 			log.info("Converting FNT file {} ...", fntFIle);
 			
+			log.info("Converting only this chars : {} ", convertedChars.toCharArray());
+			
+			
+			char currentTargetChar = 0x20;
+			int internalCharmap = 0;
 			for (int index = 0; index < 128; index++) // 128 chars composés de 8 octets
 			{
 				byte[] currentData = in.readNBytes(8); // on lit 8 octets
-				if (index < 0x40 || index > 0x5F)				
+				
+				
+				if ((index < 0x40 || index > 0x5F))				
 				{			
-					ArrayUtils.reverse(currentData); // on les inverse
-					out.write(currentData); // on les écrits													
+					if (isConvertedChar(currentTargetChar))
+					{
+					  
+					  log.info("#{} - ${} - CHAR [{}]", internalCharmap, Integer.toHexString(internalCharmap), currentTargetChar);	
+					  ArrayUtils.reverse(currentData); // on les inverse
+					  out.write(currentData); // on les écrits
+					  internalCharmap++;
+					}  
+					currentTargetChar++;
 				}
 			}
 			
 			if (isBinFormat)
-			{			
-				
+			{							
 				byte[] data = new byte[5]; // 8 bytes at 0x00
 				data[0] = (byte) 0xFF;
 				log.info("Writing BIN trailer : {}", Hex.encodeHexString(data));
@@ -103,6 +120,25 @@ public class MainCommand implements Runnable
 			log.error(e.getMessage());
 		}
 
+	}
+
+	private boolean isConvertedChar(char charValue)
+	{
+		if (StringUtils.isAllBlank(convertedChars))
+		{
+			return true;
+		}
+		else
+		{
+			for(char c : convertedChars.toCharArray())
+			{
+				if (charValue == c)
+				{					
+					return true;
+				}
+			}
+			return false;
+		}
 	}
 
 }
