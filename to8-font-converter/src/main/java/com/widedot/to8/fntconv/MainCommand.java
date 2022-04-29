@@ -17,24 +17,24 @@ import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-@Command(name = "fnt-converter", description = "build a bootsector for TO8")
+@Command(name = "to8-fnt-converter", description = "Builds a font for THOMSON (MO5,MO6,TO7,TO8,TO9) from an ATARI FNT File")
 @Slf4j
 public class MainCommand implements Runnable
 {
 
-	@Option(names = { "-f", "--fnt" }, paramLabel = "Input ATARI FNT File", description = "the FNT file")
+	@Option(names = { "-f", "--fnt" }, paramLabel = "Input ATARI FNT File", description = "the FNT file", required = true)
 	File fntFIle;
 
-	@Option(names = { "-o", "--output" }, paramLabel = "Destination File", description = "Font File for Thomson")
+	@Option(names = { "-o", "--output" }, paramLabel = "Destination File", description = "Font File for Thomson, will be RAW or BIN file", required = true)
 	File destFile;
-	
-	@Option(names = { "-b", "--binary" }, paramLabel = "Binary File ?", description = "Produce a THOMSON BIN Format, compatible with LOADM")
+
+	@Option(names = { "-b", "--binary" }, paramLabel = "Binary File ?", description = "Produces a THOMSON BIN Format, compatible with LOADM")
 	boolean isBinFormat;
-	
-	@Option(names = { "--org" }, paramLabel = "Org IMPL", description = "ORG address for the BIN generation")
+
+	@Option(names = { "--org" }, paramLabel = "ORG implementation address", description = "ORG address for the BIN generation")
 	String orgAddress;
-	
-	@Option(names = { "--convert-only" }, paramLabel = "Char list", description = "Char list to convert")
+
+	@Option(names = { "--convert-only" }, paramLabel = "Char List", description = "Char list to convert")
 	String convertedChars;
 
 	public static void main(String[] args)
@@ -53,59 +53,55 @@ public class MainCommand implements Runnable
 	@Override
 	public void run()
 	{
-		
-		
+
 		try (InputStream in = new FileInputStream(fntFIle); OutputStream out = new FileOutputStream(destFile))
 		{
-			
+
 			if (isBinFormat)
 			{
-				log.info("Generating BIN Format with address ${}", orgAddress); 
-				
+				log.info("Generating BIN Format with address ${}", orgAddress);
+
 				byte[] decoded = Hex.decodeHex(orgAddress);
-				
-				// 0x3000 = 768 octets				
-				byte[] header = { 0x00, 0x03, 0x00, decoded[0], decoded[1]};
-			
-				
+
+				// 0x3000 = 768 octets
+				byte[] header = { 0x00, 0x03, 0x00, decoded[0], decoded[1] };
+
 				log.info("BIN Header : {}", Hex.encodeHexString(header));
-				
+
 				out.write(header);
-				
+
 			}
 			else
 			{
 				log.info("Generating RAW Format", orgAddress);
 			}
-			
+
 			log.info("Converting FNT file {} ...", fntFIle);
-			
+
 			log.info("Converting only this chars : {} ", convertedChars.toCharArray());
-			
-			
+
 			char currentTargetChar = 0x20;
 			int internalCharmap = 0;
 			for (int index = 0; index < 128; index++) // 128 chars composés de 8 octets
 			{
 				byte[] currentData = in.readNBytes(8); // on lit 8 octets
-				
-				
-				if ((index < 0x40 || index > 0x5F))				
-				{			
+
+				if ((index < 0x40 || index > 0x5F))
+				{
 					if (isConvertedChar(currentTargetChar))
 					{
-					  
-					  log.info("#{} - ${} - CHAR [{}]", internalCharmap, Integer.toHexString(internalCharmap), currentTargetChar);	
-					  ArrayUtils.reverse(currentData); // on les inverse
-					  out.write(currentData); // on les écrits
-					  internalCharmap++;
-					}  
+
+						log.info("#{} - ${} - CHAR [{}]", internalCharmap, Integer.toHexString(internalCharmap), currentTargetChar);
+						ArrayUtils.reverse(currentData); // on les inverse
+						out.write(currentData); // on les écrits
+						internalCharmap++;
+					}
 					currentTargetChar++;
 				}
 			}
-			
+
 			if (isBinFormat)
-			{							
+			{
 				byte[] data = new byte[5]; // 8 bytes at 0x00
 				data[0] = (byte) 0xFF;
 				log.info("Writing BIN trailer : {}", Hex.encodeHexString(data));
@@ -130,12 +126,10 @@ public class MainCommand implements Runnable
 		}
 		else
 		{
-			for(char c : convertedChars.toCharArray())
+			for (char c : convertedChars.toCharArray())
 			{
 				if (charValue == c)
-				{					
-					return true;
-				}
+				{ return true; }
 			}
 			return false;
 		}
