@@ -22,16 +22,16 @@ import picocli.CommandLine.Option;
 public class MainCommand implements Runnable
 {
 
-	@Option(names = { "-f", "--fnt" }, paramLabel = "Input ATARI FNT File", description = "the FNT file", required = true)
+	@Option(names = { "-f", "--fnt" }, paramLabel = "Input ATARI FNT File", description = "The FNT file", required = true)
 	File fntFIle;
 
 	@Option(names = { "-o", "--output" }, paramLabel = "Destination File", description = "Font File for Thomson, will be RAW or BIN file", required = true)
 	File destFile;
 
-	@Option(names = { "-b", "--binary" }, paramLabel = "Binary File ?", description = "Produces a THOMSON BIN Format, compatible with LOADM")
+	@Option(names = { "-b", "--binary" }, paramLabel = "Binary File ?", description = "Produces a THOMSON BIN Format, compatible with LOADM.")
 	boolean isBinFormat;
 
-	@Option(names = { "--org" }, paramLabel = "ORG implementation address", description = "ORG address for the BIN generation")
+	@Option(names = { "--org" }, paramLabel = "ORG implementation address", description = "ORG address. Only needed in case of BIN generation.")
 	String orgAddress;
 
 	@Option(names = { "--convert-only" }, paramLabel = "Char List", description = "Char list to convert")
