@@ -1,10 +1,10 @@
 # to8-font-converter
 
-This tools converts an Atari FNT File into a THOMSON compatible G0 font.
+This tool converts an Atari FNT File into a THOMSON compatible G0 font.
 
 Atari FNT Files can be found here <https://github.com/TheRobotFactory/EightBit-Atari-Fonts>.
 
-This offers a very large set of 8-bits font for THOMSON Computers.
+This offers a very large set of 8-bits fonts for THOMSON Computers.
 
 ## How to build & run this tool
 
@@ -15,9 +15,9 @@ $  mvn package
 ```
 
 Then, executables were generated in target subfolder :
-- to8-font-converter (for Linux and MacOS)
-- to8-font-converter.exe (for Windows, obviously)
-- to8-font-converter-0.0.1-SNAPSHOT-jar-with-dependencies.jar (Pure Java)
+- `to8-font-converter` (for Linux and MacOS)
+- `to8-font-converter.exe` (for Windows, obviously)
+- `to8-font-converter-0.0.1-SNAPSHOT-jar-with-dependencies.jar` (Pure Java)
 
 ### Using
 
