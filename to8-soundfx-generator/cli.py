@@ -18,7 +18,7 @@ from to8sfx import analyze as an
 from to8sfx import codegen, importer, instruments, melody, opll, parametric
 
 
-def _emit(args, frames, source_label):
+def _emit(args, frames, source_label, envelope=None):
     melodic = getattr(args, "melodic", False)
     if melodic:
         tc = getattr(args, "tuning_cents", None)
@@ -29,6 +29,8 @@ def _emit(args, frames, source_label):
             scale=args.scale,
             root=args.root,
             retrigger=not args.no_retrigger,
+            envelope=envelope,
+            onset_threshold_db=args.onset_db,
         )
         if notes:
             print(f"  melodie : {melody.describe(notes)}", file=sys.stderr)
@@ -98,6 +100,7 @@ def cmd_wav(args):
     i0, i1 = an.trim_bounds(frames)
     hop = a.rate // an.FRAME_RATE
     frames, x = frames[i0:i1], x[i0 * hop : i1 * hop]
+    envelope = a.rms[i0:i1]
     if not frames:
         sys.exit("aucune trame exploitable (son silencieux ?)")
 
@@ -115,7 +118,7 @@ def cmd_wav(args):
         else:
             best = rank[0]["instrument"]
             frames = [opll.Frame(f.voiced, f.fnum, f.block, f.volume, best, f.attack) for f in frames]
-    _emit(args, frames, args.input)
+    _emit(args, frames, args.input, envelope)
 
 
 def cmd_import(args):
@@ -164,6 +167,9 @@ def main():
                        help="enchainer les notes en legato au lieu de les reattaquer")
         p.add_argument("--tuning-cents", type=float, default=None, dest="tuning_cents",
                        help="accordage force en cents (defaut : mesure sur la source)")
+        p.add_argument("--onset-db", type=float, default=1.5, dest="onset_db",
+                       help="sensibilite aux attaques, en dB (0 = ne pas separer "
+                            "les notes de meme hauteur)")
         p.add_argument("--scale", default="chromatique", choices=list(melody.SCALES))
         p.add_argument("--root", type=int, default=0,
                        help="tonique de la gamme, 0 = C .. 11 = B")
@@ -185,7 +191,8 @@ def main():
                    help="debut de la selection dans le fichier source (ms)")
     p.add_argument("--end-ms", type=float, default=None, dest="end_ms",
                    help="fin de la selection (ms)")
-    p.add_argument("--smooth", type=int, default=3)
+    p.add_argument("--smooth", type=int, default=1,
+                   help="filtre median sur la hauteur, en trames (1 = aucun)")
     p.add_argument("--pitch-shift", type=float, default=0.0, dest="pitch_shift")
     p.add_argument("--gain-db", type=float, default=0.0, dest="gain_db")
     p.add_argument("--auto-instrument", action="store_true", dest="auto_instrument")

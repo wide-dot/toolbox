@@ -132,14 +132,22 @@ Pour un jingle de bonus, un power-up, un arpège — tout ce qui doit sonner
 du détecteur) et le résultat glisse ou sonne faux. Le mode mélodique découpe le
 son en **notes tenues** et cale chacune sur un demi-tempéré.
 
-Trois choses le rendent utilisable sur de vraies prises :
+Quatre choses le rendent utilisable sur de vraies prises :
 
 - **Le découpage en notes**, pas le snap image par image. Snapper chaque trame
   fait papillonner la note entre deux demi-tons dès que la hauteur passe près
   d'une frontière ; on regroupe donc en segments stables et on prend la médiane
   de chacun. Une durée minimale de note (réglable) absorbe les scories de bord,
-  mais **uniquement** vers une note voisine réellement stable — sinon un
-  glissando se ferait manger et se réduirait à sa médiane.
+  mais **uniquement** vers une note voisine réellement stable, et en une seule
+  passe sur le découpage d'origine — sinon la cible grossit à chaque
+  absorption, devient un aimant, et avale de proche en proche tout un trait
+  rapide ou un glissando.
+- **Le découpage par l'enveloppe**, et pas seulement par la hauteur. C'est la
+  seule information qui sépare quatre doubles croches sur la même note d'une
+  note tenue, et la seule qui distingue une vraie note brève d'une hésitation
+  du détecteur. Un segment porté par une attaque est gardé même plus court que
+  la durée minimale ; le transitoire d'attaque lui-même, où le détecteur se
+  trompe souvent d'octave, est rendu à la note qu'il annonce.
 - **La compensation d'accordage.** Une prise tombe rarement sur le la 440. Le
   décalage est mesuré par médiane *dans* chaque note (contre le vibrato) puis
   moyenne circulaire *entre* les notes (contre l'enroulement à ±50 cents) — les
@@ -158,11 +166,51 @@ wav, mesuré : **214 → 85 octets**.
 Une gamme peut être forcée (majeure, mineure, pentatoniques, blues). Ça change
 la mélodie, mais ça la rend toujours juste — utile pour un jingle vite fait.
 
+**Régler la sensibilité aux attaques.** Le seuil (`--onset-db`, curseur dans
+l'interface) se règle **au-dessus de la profondeur du trémolo de la source, en
+dessous de celle de ses attaques**. Mesuré : à 1,5 dB — le défaut — un trait de
+triples croches sort entier et une tenue à 4 dB de trémolo reste d'un bloc ; à
+1 dB ce même trémolo se découpe en 8 notes, à 2 dB les triples croches
+commencent à se perdre. `0` désactive le découpage par l'enveloppe.
+
+Quand le RMS de la source n'est pas disponible (mode paramétrique, relecture
+d'un son existant), le repli se fait sur le volume des trames, quantifié par
+crans de 3 dB ; le seuil y est alors planché à 4,5 dB, faute de quoi chaque
+cran passerait pour une attaque.
+
 ```sh
 ./cli.py wav jingle.wav --melodic --name Bonus -o son.asm
 ./cli.py wav jingle.wav --melodic --min-note-frames 5 --no-retrigger -o son.asm
+./cli.py wav jingle.wav --melodic --onset-db 3 -o son.asm   # source qui tremble
 ./cli.py wav jingle.wav --melodic --tuning-cents 0 --scale penta-mineure --root 9
 ```
+
+### Sources rapides : ce qu'il faut régler
+
+Un trait où les notes s'enchaînent toutes les 20 à 60 ms est le cas le plus
+exigeant, et trois réglages se liguent contre lui par défaut :
+
+| Réglage | Défaut | Pour un trait rapide |
+|---|---|---|
+| **Lissage** (hauteur) | 1 | laisser à 1 — c'est un filtre médian, il efface les notes plus courtes que sa demi-largeur |
+| **Durée mini d'une note** | 3 trames | descendre à 1 quand les notes s'enchaînent vraiment à chaque trame |
+| **Sensibilité aux attaques** | 1,5 dB | baisser si les notes se fondent l'une dans l'autre |
+
+Mesuré sur un arpège à **une note toutes les 20 ms** (144 notes en 2,9 s) :
+avec les anciens réglages, 47 notes et une alternance de deux hauteurs qui
+n'existe pas dans la source ; avec *lissage 1 / durée mini 1*, **144 sur 144**,
+motif exact.
+
+Attention en revanche au budget : à une note par trame il faut environ trois
+commandes par note, donc **~85 notes, soit 1,7 s** de trait continu avant de
+saturer le compteur de l'en-tête. Au-delà, découper la source en plusieurs
+bruitages avec les marqueurs.
+
+Un cas voisin, qui n'a rien à voir avec les réglages : quand la source joue
+**plusieurs notes à la fois**, il n'y a pas de hauteur unique à trouver. Le
+détecteur rend une hauteur de compromis, et la voie du YM2413 étant
+monophonique de toute façon, il faut choisir une ligne — arpéger plutôt que
+plaquer.
 
 ---
 
@@ -181,7 +229,7 @@ niveau. L'option est donc **désactivée par défaut**, et l'interface le rappel
 
 ## Validation
 
-`python3 -m tests` (9 tests) vérifie, contre l'émulateur :
+`python3 -m tests` (19 tests) vérifie, contre l'émulateur :
 
 - la formule `f = fnum × clk / 72 / 2^(19−block)` — écart max mesuré **0,02 %** ;
 - le pas de volume à **3,01 dB** par cran ;
@@ -190,7 +238,27 @@ niveau. L'option est donc **désactivée par défaut**, et l'interface le rappel
 - qu'une source désaccordée de 40 cents donne les mêmes notes ;
 - que la ré-attaque relance bien l'enveloppe (mesuré : ×2,66 au passage de note,
   contre ×0,94 en legato) ;
-- qu'un glissando reste une suite de notes au lieu d'être écrasé en une seule.
+- qu'un glissando reste une suite de notes au lieu d'être écrasé en une seule ;
+- que quatre doubles croches sur la même hauteur restent quatre notes ;
+- qu'un trait rapide voisin d'une note tenue n'est pas avalé par elle, même
+  avec une erreur d'octave d'une trame sur chaque attaque ;
+- mais qu'une erreur d'octave isolée au milieu d'une tenue est toujours
+  nettoyée ;
+- que le seuil d'attaque par défaut tient les deux bords du compromis ;
+- qu'un arpège à une note toutes les 20 ms s'analyse à 100 % de trames voisées,
+  avec ou sans bruit — la fenêtre d'analyse était plus longue que les notes, ce
+  qui produisait des trous et une hauteur grave absurde tenue sur tout le
+  passage ;
+- que la plage de fréquences n'a pas été payée en échange : une note à 61,7 Hz
+  reste détectée à 100 % ;
+- qu'un trait à une note par trame ressort note pour note, à la limite exacte
+  de ce que le driver sait représenter ;
+- qu'aucune note fantôme au-dessus de `fmax` n'apparaît sur la première trame.
+
+Mesure de bout en bout, sur une mélodie de 16 notes (noires, doubles et triples
+croches, plus une note répétée quatre fois) : **10 notes restituées avant, dont
+une hauteur jamais jouée ; 16 sur 16 après**, à ±1 trame près — la résolution du
+driver — pour **9 octets de plus**.
 
 Les six bruitages de r-type, relus par `import`, redonnent **exactement** les
 tailles mesurées par lwasm (76, 118, 130, 130, 115, 199 = 768 octets).
@@ -215,8 +283,10 @@ build.sh  run.sh  cli.py
 to8sfx/
   opll.py         emulateur (ctypes), patchs ROM, conversions hauteur/volume
   analyze.py      chargement audio, YIN, enveloppe, voisement -> trames 50 Hz
+                  (la fenetre d'integration y vaut une demi-trame : plus longue,
+                   elle enjambe les notes breves et les fait disparaitre)
   parametric.py   balayages et presets
-  melody.py       decoupage en notes, accordage, gammes, re-attaque
+  melody.py       decoupage en notes et en attaques, accordage, gammes, re-attaque
   instruments.py  appariement spectral, Viterbi d'entrelacement, fit du patch custom
   codegen.py      trames -> commandes (deduplication/RLE) -> assembleur
   importer.py     relecture d'un bloc existant, ecriture wav
