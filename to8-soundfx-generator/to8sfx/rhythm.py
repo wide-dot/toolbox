@@ -52,11 +52,22 @@ def check_channel(channel: int) -> None:
 
 
 def encode(reg: int, channel: int) -> int:
-    """Registre a EMETTRE pour que la puce recoive `reg`."""
+    """Registre a EMETTRE pour que la puce recoive `reg`.
+
+    `reg` doit satisfaire reg - channel > $0F, sans quoi il est inatteignable :
+    le driver ecrirait le resultat verbatim au lieu de lui ajouter le numero de voie.
+    """
     if reg <= 0x0F:
         return reg
     check_channel(channel)
-    return reg - channel
+    out = reg - channel
+    if out <= 0x0F:
+        raise ValueError(
+            f"registre ${reg:02X} inatteignable depuis la voie {channel} : la "
+            f"compensation donne ${out:02X}, que le driver ecrirait verbatim "
+            "au lieu de lui ajouter le numero de voie."
+        )
+    return out
 
 
 def arm_writes(noise_pitch: int, noise_vol: int) -> list[tuple[int, int]]:
