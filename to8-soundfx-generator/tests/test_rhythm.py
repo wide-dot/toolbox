@@ -52,6 +52,26 @@ def test_channels_above_six_are_refused():
     print("  voies 7 et 8 refusees, 0 a 6 acceptees")
 
 
+def test_encode_refuses_a_rhythm_register_on_an_out_of_range_channel():
+    """Le garde doit etre DANS encode, pas seulement disponible a cote.
+
+    Sans ce test, retirer check_channel de encode laisserait toute la suite au
+    vert pendant que encode(0x16, 7) rendrait $0F : le driver l'ecrirait
+    verbatim et viserait le registre de controle du rythme au lieu de la
+    hauteur de la grosse caisse. Silencieux, et faux.
+    """
+    for channel in (7, 8):
+        for reg, _val in rhythm.arm_writes(noise_pitch=4, noise_vol=4):
+            try:
+                rhythm.encode(reg, channel)
+            except ValueError:
+                continue
+            raise AssertionError(
+                f"encode(${reg:02X}, {channel}) n'a pas leve alors que la voie "
+                "est hors plage")
+    print("  encode refuse les registres rythmiques au-dela de la voie 6")
+
+
 def test_each_percussion_is_actually_noisy():
     """La caisse claire et la charleston doivent produire du bruit, pas un son
     pur : c'est toute la raison d'etre de cette couche."""
