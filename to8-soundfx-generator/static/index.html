@@ -85,7 +85,10 @@
       <input type="file" id="file" accept="audio/*,video/*" class="hide">
       <div id="srcInfo" class="hint"></div>
       <label>Lissage de hauteur (trames) <span id="vSmooth">3</span></label>
-      <input type="range" id="smooth" min="1" max="9" step="2" value="3">
+      <input type="range" id="smooth" min="1" max="9" step="2" value="1">
+      <div class="hint">Filtre m&eacute;dian sur la hauteur. Il efface les notes plus
+        courtes que sa demi-largeur&nbsp;: le laisser &agrave; 1 sauf si la courbe de
+        hauteur tremble vraiment.</div>
       <label>Transposition (demi-tons) <span id="vShift">0</span></label>
       <input type="range" id="pitch_shift" min="-24" max="24" step="1" value="0">
       <label>Gain d'analyse (dB) <span id="vGain">0</span></label>
@@ -157,7 +160,19 @@
       courbe brute. Pour les jingles, bonus, power-ups.</div>
     <div id="melWrap" class="hide">
       <label>Dur&eacute;e mini d'une note <span id="vMin">3</span> trames (<span id="vMinMs">60</span> ms)</label>
-      <input type="range" id="melodic_min_frames" min="2" max="12" step="1" value="3">
+      <input type="range" id="melodic_min_frames" min="1" max="12" step="1" value="3">
+      <div class="hint">Ne s'applique qu'aux segments sans attaque : une note
+        port&eacute;e par une attaque est gard&eacute;e m&ecirc;me plus courte que &ccedil;a.
+        <b>1 trame</b> d&eacute;sactive tout lissage de la hauteur&nbsp;: &agrave; r&eacute;server aux
+        traits o&ugrave; les notes s'encha&icirc;nent vraiment &agrave; chaque trame, sinon chaque
+        h&eacute;sitation du d&eacute;tecteur devient une note.</div>
+      <label>Sensibilit&eacute; aux attaques <span id="vOnset">1.5</span> dB</label>
+      <input type="range" id="melodic_onset_db" min="0" max="12" step="0.5" value="1.5">
+      <div class="hint">C'est l'enveloppe qui d&eacute;coupe les notes, pas seulement la
+        hauteur&nbsp;: sans elle, quatre doubles croches sur la m&ecirc;me note ne font
+        qu'une note tenue, et les traits rapides se font avaler. Baisser pour
+        r&eacute;cup&eacute;rer des doubles/triples croches, monter si une note tenue se
+        d&eacute;coupe toute seule&nbsp;: le bon r&eacute;glage est <i>au-dessus de la profondeur du tr&eacute;molo de la source, en dessous de celle de ses attaques</i>. <b>0 = d&eacute;sactiv&eacute;</b> (d&eacute;coupage par la hauteur seule).</div>
       <label style="display:flex;gap:8px;align-items:center;margin-top:10px">
         <input type="checkbox" id="melodic_retrigger" checked style="width:auto"> R&eacute;attaquer chaque note
       </label>
@@ -289,6 +304,7 @@ function syncLabels(){
   $('vSw').textContent = $('switch_penalty').value;
   $('vMin').textContent = $('melodic_min_frames').value;
   $('vMinMs').textContent = $('melodic_min_frames').value * 20;
+  $('vOnset').textContent = $('melodic_onset_db').value;
   $('vTun').textContent = $('melodic_tuning').value;
 }
 
@@ -439,6 +455,7 @@ function params(){
     melodic: $('melodic').checked,
     melodic_min_frames: +$('melodic_min_frames').value,
     melodic_retrigger: $('melodic_retrigger').checked,
+    melodic_onset_db: +$('melodic_onset_db').value,
     melodic_tuning: $('tuning_mode').value === 'auto' ? 'auto' : +$('melodic_tuning').value,
     melodic_scale: $('melodic_scale').value,
     melodic_root: +$('melodic_root').value,
@@ -617,7 +634,8 @@ const debounced = ()=>{ syncLabels(); if(!$('live').checked) return;
 for (const id of ['duration_ms','f_start','f_end','pitch_curve','vol_start','vol_end','jitter_cents',
                   'vibrato_hz','vibrato_cents','instrument','switch_penalty','smooth','pitch_shift',
                   'gain_db','trim','channel','priority','name','custom_seed',
-                  'melodic_min_frames','melodic_retrigger','melodic_tuning','melodic_scale',
+                  'melodic_min_frames','melodic_retrigger','melodic_onset_db',
+                  'melodic_tuning','melodic_scale',
                   'melodic_root']) {
   const el = $(id); if(!el) continue;
   el.addEventListener('input', debounced); el.addEventListener('change', debounced);

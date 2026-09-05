@@ -84,6 +84,11 @@ def _yin_frame(seg: np.ndarray, rate: int, w: int, tau_min: int, tau_max: int,
         if den != 0:
             tau = tau + 0.5 * (a_ - c_) / den
 
+    # Le raffinement peut sortir de la plage demandee, et rendait alors une
+    # hauteur au-dessus de fmax — une note fantome, tres aigue, sur la premiere
+    # trame d'un son.
+    tau = min(max(tau, tau_min), tau_max)
+
     return float(tau), float(dp[int(round(tau))] if 0 < tau <= tau_max else 1.0)
 
 
@@ -115,14 +120,40 @@ def analyze(
     silence_db: float = -45.0,
 ) -> Analysis:
     hop = rate // FRAME_RATE
-    w = 2048
+
+    # Fenetre d'integration : une demi-trame du driver.
+    #
+    # C'est le reglage le plus lourd de consequences de tout l'outil. Une
+    # fenetre longue donne une hauteur plus stable sur une note tenue, mais des
+    # qu'elle depasse la duree d'une note elle en enjambe deux ou trois : YIN
+    # cherche alors une periode unique dans un melange, ne trouve rien de franc
+    # (l'aperiodicite monte au-dessus du seuil de voisement) et la trame est
+    # declaree muette. Un trait rapide se transforme en trous, et la ou une
+    # periode est quand meme trouvee c'est celle de la REPETITION des notes,
+    # pas leur hauteur — d'ou des notes graves absurdes, tenues sur tout le
+    # passage.
+    #
+    # Mesure sur un arpege a une note toutes les 20 ms : fenetre de 2048
+    # (46 ms), 25 % de trames voisees et une seule note fausse repetee ;
+    # fenetre de 441 (10 ms), 100 % de trames voisees et l'arpege exact. Rien
+    # ne se degrade en face — une tenue bruitee et une note a 61,7 Hz restent
+    # a 100 %, parce que tau_max, lui, ne bouge pas : la plage de frequences
+    # analysable ne depend PAS de la fenetre.
+    #
+    # Descendre sous la demi-trame n'apporterait rien : le driver ne sait pas
+    # representer un evenement plus court que sa trame de 20 ms.
+    w = max(256, hop // 2)
     tau_min = max(2, int(rate / fmax))
-    tau_max = min(w, int(rate / fmin))
+    tau_max = int(rate / fmin)
     need = w + tau_max
 
+    # La trame i du driver couvre x[i*hop : (i+1)*hop] : l'analyse doit porter
+    # sur CE morceau-la. Un remplissage en tete decalait la fenetre de hauteur
+    # d'une trame entiere et le RMS d'une demi-trame — la hauteur de la trame i
+    # etait donc mesuree surtout sur l'audio de la trame precedente, et elle
+    # n'etait meme pas alignee avec l'enveloppe qui sert a decouper les notes.
     n_frames = max(1, int(np.ceil(len(x) / hop)))
-    pad = np.concatenate([np.zeros(hop, dtype=np.float32), x,
-                          np.zeros(need + hop, dtype=np.float32)])
+    pad = np.concatenate([x, np.zeros(need + hop, dtype=np.float32)])
 
     f0 = np.zeros(n_frames)
     aper = np.ones(n_frames)
@@ -131,7 +162,7 @@ def analyze(
     for i in range(n_frames):
         start = i * hop
         seg = pad[start : start + need].astype(np.float64)
-        block = pad[start + hop // 2 : start + hop // 2 + hop]
+        block = pad[start : start + hop]
         rms[i] = float(np.sqrt(np.mean(block**2))) if block.size else 0.0
         if rms[i] <= 0:
             continue
@@ -185,7 +216,15 @@ def to_frames(
     pitch_shift_semitones: float = 0.0,
     gain_db: float = 0.0,
 ) -> list[Frame]:
-    """Analyse -> trames du driver (fnum/block/volume par tick 50 Hz)."""
+    """Analyse -> trames du driver (fnum/block/volume par tick 50 Hz).
+
+    smooth est un filtre median sur la hauteur, en trames. Comme tout filtre
+    median il efface les notes plus courtes que sa demi-largeur : a 3, un trait
+    dont les notes s'enchainent a chaque trame ressort en une alternance qui
+    n'a jamais ete jouee. Il vaut 1 (aucun lissage) par defaut — mesure, il
+    n'apporte rien meme sur une source bruitee, et le mode melodique fait deja
+    son propre nettoyage, lui capable de ne pas traverser une attaque.
+    """
     f0 = a.f0.copy()
     if smooth >= 3:
         # on ne lisse que les trames voisees, pour ne pas etaler la hauteur

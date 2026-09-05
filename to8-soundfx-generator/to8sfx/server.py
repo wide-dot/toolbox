@@ -64,6 +64,7 @@ def _build(params: dict) -> dict:
     # audio aligne trame a trame avec `frames` : sert a l'appariement
     # d'instrument et a l'ajustement du patch custom.
     aligned_audio = None
+    envelope = None  # RMS par trame : porte les attaques, donc les debuts de note
     rate = an.DEFAULT_RATE
 
     if mode == "wav":
@@ -79,14 +80,16 @@ def _build(params: dict) -> dict:
         frames = an.to_frames(
             a,
             instrument=int(params.get("instrument", 1)),
-            smooth=int(params.get("smooth", 3)),
+            smooth=int(params.get("smooth", 1)),
             pitch_shift_semitones=float(params.get("pitch_shift", 0.0)),
             gain_db=float(params.get("gain_db", 0.0)),
         )
+        envelope = a.rms
         if params.get("trim", True):
             i0, i1 = an.trim_bounds(frames)
             hop = rate // an.FRAME_RATE
             frames = frames[i0:i1]
+            envelope = envelope[i0:i1]
             aligned_audio = aligned_audio[i0 * hop : i1 * hop]
         sel = ""
         if params.get("start_ms") is not None or params.get("end_ms") is not None:
@@ -118,6 +121,8 @@ def _build(params: dict) -> dict:
             scale=params.get("melodic_scale") or "chromatique",
             root=int(params.get("melodic_root", 0)),
             retrigger=bool(params.get("melodic_retrigger", True)),
+            envelope=envelope,
+            onset_threshold_db=float(params.get("melodic_onset_db", 1.5)),
         )
         notes = [n.to_dict() for n in note_list]
         if not notes:
