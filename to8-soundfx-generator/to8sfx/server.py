@@ -17,7 +17,8 @@ from urllib.parse import urlparse
 import numpy as np
 
 from . import analyze as an
-from . import codegen, importer, instruments, melody, opll, parametric
+from . import bank as bank_mod
+from . import codegen, design, importer, instruments, melody, opll
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC = os.path.join(ROOT, "static")
@@ -29,6 +30,8 @@ STATE: dict = {
     "preview_wav": None,
     "source_wav": None,
     "counter": 0,
+    "variant_wavs": [],
+    "bank": None,
 }
 LOCK = threading.Lock()
 
@@ -97,12 +100,9 @@ def _build(params: dict) -> dict:
                    f" - {float(params.get('end_ms') or a0.duration*1000)/1000:.2f}s]")
         source_label = STATE["source_name"] + sel
     else:
-        sp = parametric.SweepParams(**{
-            k: v for k, v in (params.get("sweep") or {}).items()
-            if k in parametric.SweepParams.__dataclass_fields__
-        })
-        frames = parametric.sweep(sp)
-        source_label = f"mode parametrique ({params.get('preset') or 'reglages manuels'})"
+        raise ValueError(
+            "mode inconnu : le mode parametrique a ete remplace par l'onglet "
+            "Creer, qui passe par /api/design/*")
 
     if not frames:
         raise ValueError("aucune trame exploitable (le son est-il silencieux ?)")
@@ -241,6 +241,153 @@ def _build(params: dict) -> dict:
     }
 
 
+# --- Creation ---------------------------------------------------------------
+
+
+def _render_design(params: dict) -> dict:
+    """Rend un jeu de parametres : assembleur, statistiques, courbes, preview."""
+    p = design.SfxParams.from_dict(params.get("params") or {})
+    channel = int(params.get("channel", 4))
+    name = params.get("name") or "NewSound"
+    priority = int(params.get("priority", 1))
+
+    warnings: list[str] = []
+    if p.noise_on:
+        warnings.append(
+            "Couche bruit ACTIVE : le registre $0E bascule la puce en mode "
+            "rythme et requisitionne les voies 6, 7 et 8. Si la musique du jeu "
+            "s'en sert — c'est le cas de battlesquadron — son etat de batterie "
+            "sera ecrase pendant le bruitage. Voies utilisables : 0 a "
+            f"{rhythm_max()}."
+        )
+
+    frames, noise = design.render(p)
+    cmds, used, info = codegen.fit_to_budget(
+        frames, noise=noise, channel=channel,
+        noise_pitch=p.noise_pitch, noise_vol=p.noise_vol)
+    st = codegen.stats(cmds)
+
+    if info["cents"] > 0 or info["vol_step"] > 1:
+        warnings.append(
+            f"Simplifie pour tenir dans les 255 commandes : hauteur quantifiee a "
+            f"{info['cents']:.0f} cents, volume par pas de {info['vol_step']}.")
+    if info["truncated"]:
+        warnings.append(
+            "Son TRONQUE : meme simplifie au maximum il depasse 255 commandes. "
+            "Raccourcir la chute.")
+
+    ev, nsamples = codegen.commands_to_events(cmds, channel)
+    y = opll.render(ev, nsamples)
+    with LOCK:
+        STATE["counter"] += 1
+        STATE["preview_wav"] = importer.wav_bytes(y)
+
+    return {
+        "params": p.to_dict(),
+        "asm": codegen.to_asm(name, channel, cmds, priority=priority,
+                              source=f"creation, graine {p.seed}"),
+        "stats": st,
+        "info": info,
+        "warnings": warnings,
+        "curves": {
+            "freq": [round(opll.fnum_block_to_freq(f.fnum, f.block), 2) for f in used],
+            "volume": [f.volume for f in used],
+            "noise": list(noise) if noise else [],
+        },
+        "preview": f"/api/preview.wav?t={STATE['counter']}",
+        "const_line": f"soundFX.{name:22s} equ <id>",
+        "call_line": f"        _soundFX.play soundFX.{name},{priority}",
+    }
+
+
+def rhythm_max() -> int:
+    from . import rhythm
+    return rhythm.MAX_CHANNEL
+
+
+def _variants(params: dict) -> dict:
+    """Huit mutations du son courant, chacune avec son wav pret a ecouter."""
+    base = design.SfxParams.from_dict(params.get("params") or {})
+    amount = float(params.get("amount", 0.3))
+    locked = set(params.get("locked") or ())
+    seed0 = int(params.get("seed", 0))
+    count = int(params.get("count", 8))
+    channel = int(params.get("channel", 4))
+
+    out = []
+    wavs = []
+    for k in range(count):
+        p = design.mutate(base, amount, locked, seed=seed0 + k + 1)
+        frames, noise = design.render(p)
+        try:
+            cmds, _u, _i = codegen.fit_to_budget(
+                frames, noise=noise, channel=channel,
+                noise_pitch=p.noise_pitch, noise_vol=p.noise_vol)
+        except ValueError:
+            # voie incompatible avec la couche bruit : la variante est ecartee
+            continue
+        ev, n = codegen.commands_to_events(cmds, channel)
+        wavs.append(importer.wav_bytes(opll.render(ev, n)))
+        st = codegen.stats(cmds)
+        out.append({"params": p.to_dict(), "stats": st,
+                    "preview": f"/api/variant.wav?i={len(wavs) - 1}"})
+    with LOCK:
+        STATE["variant_wavs"] = wavs
+    return {"variants": out}
+
+
+def _bank() -> "bank_mod.Bank":
+    if STATE.get("bank") is None:
+        STATE["bank"] = bank_mod.Bank()
+    return STATE["bank"]
+
+
+def _bank_view() -> dict:
+    b = _bank()
+    try:
+        built = b.build()
+    except ValueError as exc:
+        built = {"asm": "", "const": "", "bytes": 0, "per_sound": [],
+                 "warnings": [str(exc)]}
+    return {
+        "name": b.name,
+        "default_channel": b.default_channel,
+        "sounds": [{"name": s.name, "category": s.category,
+                    "channel": s.channel, "priority": s.priority,
+                    "params": s.params.to_dict()} for s in b.sounds],
+        "build": built,
+    }
+
+
+def _bank_add(params: dict) -> dict:
+    b = _bank()
+    b.sounds.append(bank_mod.BankSound(
+        name=params.get("name") or f"Son{len(b.sounds)}",
+        params=design.SfxParams.from_dict(params.get("params") or {}),
+        category=params.get("category", ""),
+        channel=params.get("channel"),
+        priority=int(params.get("priority", 1)),
+    ))
+    return _bank_view()
+
+
+def _bank_remove(params: dict) -> dict:
+    b = _bank()
+    i = int(params.get("index", -1))
+    if 0 <= i < len(b.sounds):
+        b.sounds.pop(i)
+    return _bank_view()
+
+
+def _bank_settings(params: dict) -> dict:
+    b = _bank()
+    if params.get("name"):
+        b.name = str(params["name"])
+    if params.get("default_channel") is not None:
+        b.default_channel = int(params["default_channel"])
+    return _bank_view()
+
+
 # --- HTTP -------------------------------------------------------------------
 
 
@@ -268,7 +415,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, fh.read(), "text/html; charset=utf-8")
         if path == "/api/presets":
             return self._json({
-                "presets": {k: v.to_dict() for k, v in parametric.PRESETS.items()},
                 "instruments": opll.INSTRUMENTS,
                 "scales": list(melody.SCALES),
                 "notes": opll.NOTE_NAMES,
@@ -283,6 +429,26 @@ class Handler(BaseHTTPRequestHandler):
             if not data:
                 return self._json({"error": "aucune source"}, 404)
             return self._send(200, data, "audio/wav")
+        if path == "/api/design/init":
+            from . import rhythm
+            return self._json({
+                "categories": {k: v["label"] for k, v in design.CATEGORIES.items()},
+                "instruments": opll.INSTRUMENTS,
+                "kits": list(rhythm.KIT_ORDER),
+                "bounds": design.BOUNDS,
+                "int_params": sorted(design.INT_PARAMS),
+                "max_noise_channel": rhythm.MAX_CHANNEL,
+                "defaults": design.SfxParams().to_dict(),
+            })
+        if path == "/api/bank":
+            return self._json(_bank_view())
+        if path == "/api/variant.wav":
+            from urllib.parse import parse_qs
+            i = int(parse_qs(urlparse(self.path).query).get("i", ["-1"])[0])
+            wavs = STATE.get("variant_wavs") or []
+            if not 0 <= i < len(wavs):
+                return self._json({"error": "variante inconnue"}, 404)
+            return self._send(200, wavs[i], "audio/wav")
         return self._json({"error": "not found"}, 404)
 
     def do_POST(self):
@@ -323,6 +489,27 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/generate":
                 params = json.loads(body or b"{}")
                 return self._json(_build(params))
+
+            if path == "/api/design/random":
+                params = json.loads(body or b"{}")
+                p = design.randomize(params.get("category", "tir"),
+                                     int(params.get("seed", 0)))
+                return self._json(_render_design({**params, "params": p.to_dict()}))
+
+            if path == "/api/design/render":
+                return self._json(_render_design(json.loads(body or b"{}")))
+
+            if path == "/api/design/mutate":
+                return self._json(_variants(json.loads(body or b"{}")))
+
+            if path == "/api/bank/add":
+                return self._json(_bank_add(json.loads(body or b"{}")))
+
+            if path == "/api/bank/remove":
+                return self._json(_bank_remove(json.loads(body or b"{}")))
+
+            if path == "/api/bank/settings":
+                return self._json(_bank_settings(json.loads(body or b"{}")))
 
         except Exception as exc:  # renvoyer l'erreur a l'ecran, pas dans un log
             return self._json({"error": f"{type(exc).__name__}: {exc}"}, 400)
