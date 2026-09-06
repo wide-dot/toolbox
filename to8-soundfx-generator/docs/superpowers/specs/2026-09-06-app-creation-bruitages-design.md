@@ -203,7 +203,10 @@ chemin, aux côtés des deux `.asm` exportés.
 
 ## Garde-fous
 
-**Couche bruit désactivée par défaut.** Le mode rythme réquisitionne les voies
+**La couche bruit n'est jamais activée par l'outil.** Ni par défaut, ni par une
+catégorie, ni par une mutation : seul l'utilisateur la coche. Les catégories
+décrivent en revanche le kit et la forme de rafale qui conviendraient, pour
+qu'elle sonne juste le jour où il l'active. Le mode rythme réquisitionne les voies
 6-8 de la puce. La musique de battlesquadron s'en sert déjà : un bruitage qui
 écrit `$0E` écrasera l'état de batterie de la musique le temps d'une trame.
 L'avertissement va dans l'interface **et** dans l'en-tête de l'ASM généré, comme
