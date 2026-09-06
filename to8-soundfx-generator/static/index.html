@@ -147,7 +147,11 @@
     </fieldset>
   </div>
 
-  <!-- ---------- commun ---------- -->
+  <!-- Reglages du seul mode fichier. Laisses hors des panneaux, ils
+       etaient visibles depuis l'onglet Creer et leurs controles y
+       postaient vers /api/generate avec mode 'create', que le serveur
+       refuse : un bandeau rouge des qu'on y touchait. -->
+  <div id="wavOnly" class="hide">
   <fieldset><legend>Instrument</legend>
     <select id="instrument_mode">
       <option value="fixed">choisi &agrave; la main</option>
@@ -222,6 +226,7 @@
     </div>
     <div class="hint">Voie 4 : la seule que la musique in-game de battlesquadron laisse libre.</div>
   </fieldset>
+  </div>
 
 </div>
 
@@ -314,10 +319,12 @@ function syncLabels(){
 
 // ---------- onglets ----------
 let mode = 'create';
-$('tabCreate').onclick = ()=>{ mode='create'; $('tabCreate').classList.add('on');
+$('tabCreate').onclick = ()=>{ mode='create'; $('wavOnly').classList.add('hide');
+  $('tabCreate').classList.add('on');
   $('tabWav').classList.remove('on'); $('panCreate').classList.remove('hide');
   $('panWav').classList.add('hide'); $('waveWrap').classList.add('hide'); };
-$('tabWav').onclick = ()=>{ mode='wav'; $('tabWav').classList.add('on');
+$('tabWav').onclick = ()=>{ mode='wav'; $('wavOnly').classList.remove('hide');
+  $('tabWav').classList.add('on');
   $('tabCreate').classList.remove('on'); $('panWav').classList.remove('hide');
   $('panCreate').classList.add('hide');
   if(SRC){ $('waveWrap').classList.remove('hide'); drawWave(); }
@@ -655,7 +662,14 @@ function buildSliders(){
     box.appendChild(row);
   }
   box.oninput = e => {
-    if (e.target.dataset.p){ CUR[e.target.dataset.p] = +e.target.value; render(); }
+    const key = e.target.dataset.p;
+    if (!key) return;
+    CUR[key] = +e.target.value;
+    // Peindre l'etiquette ici : paintParams() ne passe qu'au tirage et a
+    // l'adoption, donc la valeur restait figee pendant qu'on glissait.
+    const v = document.querySelector(`[data-v="${key}"]`);
+    if (v) v.textContent = (+CUR[key]).toFixed(INIT.int_params.includes(key) ? 0 : 2);
+    render();
   };
   box.onchange = e => {
     const k = e.target.dataset.lock;
@@ -801,7 +815,7 @@ audioSrc.addEventListener('timeupdate', ()=>{
     else audioSrc.pause();
   }
 });
-$('gen').onclick = generate;
+$('gen').onclick = () => (mode === 'wav' ? generate() : render());
 $('copy').onclick = async ()=>{ await navigator.clipboard.writeText($('asm').value);
   $('copied').textContent='copié'; setTimeout(()=>$('copied').textContent='',1500); };
 
