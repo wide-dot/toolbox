@@ -18,6 +18,7 @@ import numpy as np
 
 from . import analyze as an
 from . import bank as bank_mod
+from . import rhythm
 from . import codegen, design, importer, instruments, melody, opll
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -248,6 +249,7 @@ def _render_design(params: dict) -> dict:
     """Rend un jeu de parametres : assembleur, statistiques, courbes, preview."""
     p = design.SfxParams.from_dict(params.get("params") or {})
     channel = int(params.get("channel", 4))
+    rhythm.check_any_channel(channel)
     name = params.get("name") or "NewSound"
     priority = int(params.get("priority", 1))
 
@@ -313,6 +315,7 @@ def _variants(params: dict) -> dict:
     seed0 = int(params.get("seed", 0))
     count = int(params.get("count", 8))
     channel = int(params.get("channel", 4))
+    rhythm.check_any_channel(channel)
 
     out = []
     wavs = []

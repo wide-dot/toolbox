@@ -77,6 +77,9 @@ class Bank:
                     f"nom en double : {s.name}. Deux `equ` porteraient le meme "
                     "nom pour deux identifiants differents.")
             seen.add(s.name)
+            # La voie part dans le deuxieme octet de l'en-tete du bloc : une
+            # valeur aberrante s'y ecrivait telle quelle jusqu'a la machine.
+            rhythm.check_any_channel(self.channel_of(s))
             if s.params.noise_on:
                 rhythm.check_channel(self.channel_of(s))
 
