@@ -31,7 +31,7 @@ l'assembleur ; c'est l'utilisateur qui le colle dans son jeu, quand il veut.
 ## État exact
 
 Branche **`feat/app-creation-bruitages`**, partie de `eabf2c4` sur `main`.
-**Rien n'est poussé.** 17 commits, 55 tests verts, arbre propre.
+**Rien n'est poussé.** 20 commits, 60 tests verts, arbre propre.
 
 | Tâche | État |
 |---|---|
@@ -40,18 +40,25 @@ Branche **`feat/app-creation-bruitages`**, partie de `eabf2c4` sur `main`.
 | 3 — modèle de son (`design.py`) | **close**, relue |
 | 4 — catégories, tirage, mutation | **close**, relue |
 | 5 — banque et export des deux `.asm` | **close**, relue |
-| 6 — endpoints du serveur | à faire |
+| 6 — endpoints du serveur | **close**, relue |
 | 7 — onglet Créer | à faire |
 | 8 — CLI, retrait de `parametric.py`, README | à faire |
 
 ### Le point d'arrêt précis
 
-**Les cinq premières tâches sont closes et relues.** Arbre propre, 55 tests
-verts. La reprise commence à la **tâche 6** — les endpoints du serveur. Son
-cahier des charges est déjà extrait : `task-6-brief.md` dans le répertoire du
-registre, régénéré sur le plan corrigé.
+**Les six premières tâches sont closes et relues.** Arbre propre, 60 tests
+verts. La reprise commence à la **tâche 7** — l'onglet Créer. Son cahier des
+charges est extrait : `task-7-brief.md`, régénéré sur le plan corrigé.
 
-**Une chose à porter dans la dispatch de la tâche 6 :** un test de la tâche 4
+**À porter dans la dispatch de la tâche 7 (ruling R3) :** le plan y appelle
+`show(d)`, `play(url)` et un panneau `panCreate` en ajoutant « adapter si les
+noms diffèrent » — c'est un placeholder. Les vrais noms : le panneau existant
+s'appelle `panParam` (à renommer `panCreate`), il n'y a ni `show` ni `play`, la
+peinture est en ligne dans `generate()` et la lecture passe par
+`audioOut = new Audio()`. Il faut extraire un `paint(d)` appelé par les deux
+chemins et ajouter un `play(url)`.
+
+**Aussi :** un test de la tâche 4
 s'appelle « pire coin » alors qu'il n'en construit qu'un partiel (voir R13 plus
 bas). Nom trompeur, à corriger si l'occasion se présente.
 
@@ -120,8 +127,8 @@ aller plus vite.
 
 ```sh
 cd toolbox/to8-soundfx-generator
-git log --oneline eabf2c4..HEAD     # les 17 commits
-python3 -m tests                    # doit donner 55 OK
+git log --oneline eabf2c4..HEAD     # les 20 commits
+python3 -m tests                    # doit donner 60 OK
 cat ../.superpowers/sdd/2026-09-06-app-creation-bruitages/progress.md
 ```
 
