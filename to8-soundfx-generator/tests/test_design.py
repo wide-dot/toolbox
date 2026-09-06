@@ -173,6 +173,92 @@ def test_every_category_fits_the_budget():
     print("  " + ", ".join(f"{c} max {p} cmd" for c, (_, p) in worst.items()))
 
 
+def test_arp_steps_are_locked_and_bounded():
+    """Les marches d'arpege sont un tuple, pas un scalaire : ni BOUNDS ni le
+    clamp numerique ne les couvrent. Il faut donc verifier a part que le cadenas
+    les protege et que la mutation ne les fait pas deriver.
+
+    Le test des cadenas ne pouvait pas le voir : il mute "explosion", dont
+    arp_steps vaut (), donc la branche n'y est jamais executee.
+    """
+    base = design.randomize("ramassage", seed=5)
+    assert base.arp_steps, "la categorie ramassage doit fixer des marches"
+
+    verrouille = design.mutate(base, amount=1.0, locked={"arp_steps"}, seed=1)
+    assert verrouille.arp_steps == base.arp_steps, "le cadenas n'a pas tenu"
+
+    # une longue chaine de mutations, c'est exactement ce que fait l'utilisateur
+    p = base
+    for k in range(200):
+        p = design.mutate(p, amount=1.0, locked=set(), seed=k)
+        for s in p.arp_steps:
+            assert design.ARP_STEP_MIN <= s <= design.ARP_STEP_MAX, (
+                f"marche {s} hors domaine apres {k + 1} mutations")
+    print(f"  200 mutations enchainees, marches restees dans "
+          f"[{design.ARP_STEP_MIN}, {design.ARP_STEP_MAX}] : {p.arp_steps}")
+
+
+def test_randomize_stays_inside_the_category_ranges():
+    """Une categorie est un a priori : si ses plages ne sont pas respectees,
+    "tir" et "explosion" tirent dans le meme espace et le choix de categorie ne
+    sert plus a rien. Les bornes globales, elles, ne le detecteraient pas.
+    """
+    for nom, cat in design.CATEGORIES.items():
+        for seed in range(50):
+            p = design.randomize(nom, seed=seed)
+            for key, (lo, hi) in cat.get("ranges", {}).items():
+                if key in cat.get("fixed", {}):
+                    continue  # `fixed` ecrase le tirage, c'est voulu
+                v = getattr(p, key)
+                assert lo <= v <= hi, (
+                    f"{nom} : {key} = {v} hors de sa plage [{lo}, {hi}]")
+            for key, want in cat.get("fixed", {}).items():
+                assert getattr(p, key) == want, f"{nom} : {key} non fixe"
+    print(f"  {len(design.CATEGORIES)} categories, plages et valeurs fixes respectees")
+
+
+def test_mutate_is_deterministic():
+    base = design.randomize("saut", seed=3)
+    a = design.mutate(base, amount=0.4, locked={"instrument"}, seed=77)
+    b = design.mutate(base, amount=0.4, locked={"instrument"}, seed=77)
+    assert a.to_dict() == b.to_dict(), "mutate n'est pas deterministe"
+    c = design.mutate(base, amount=0.4, locked={"instrument"}, seed=78)
+    assert c.to_dict() != a.to_dict(), "deux graines donnent la meme mutation"
+    print("  mutate deterministe a graine donnee")
+
+
+def test_every_category_fits_the_budget_at_its_worst_corner():
+    """L'echantillonnage ne prouve pas la borne : 200 tirages independants sur
+    un espace multi-dimensionnel peuvent tres bien n'avoir jamais reuni la pire
+    combinaison d'une categorie. On construit donc ce coin a la main.
+
+    Le cout en commandes croit avec la duree, avec le nombre de frappes, et
+    quand l'arpege change de marche a chaque trame.
+    """
+    from to8sfx import codegen
+
+    for nom, cat in design.CATEGORIES.items():
+        p = design.randomize(nom, seed=0)
+        ranges = cat.get("ranges", {})
+        for key in ("attack_frames", "hold_frames", "decay_frames",
+                    "noise_hits", "noise_spread_frames"):
+            lo, hi = ranges.get(key, design.BOUNDS[key])
+            setattr(p, key, design._clamp(key, hi))
+        if p.arp_steps:
+            p.arp_frames = 1  # une marche par trame : le maximum d'ecritures
+        for key, want in cat.get("fixed", {}).items():
+            setattr(p, key, want)
+
+        frames, noise = design.render(p)
+        cmds, _u, info = codegen.fit_to_budget(
+            frames, noise=noise, channel=4,
+            noise_pitch=p.noise_pitch, noise_vol=p.noise_vol)
+        assert not info["truncated"], (
+            f"{nom} : tronque a son pire coin ({len(cmds)} commandes, "
+            f"{p.duration_frames} trames)")
+        print(f"    {nom:12s} pire coin : {len(cmds):3d} commandes")
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

@@ -123,6 +123,12 @@ INT_PARAMS = {"attack_frames", "hold_frames", "decay_frames", "vol_peak",
               "vol_end", "arp_frames", "instrument", "repeat_frames",
               "noise_hits", "noise_spread_frames", "noise_pitch", "noise_vol"}
 
+# arp_steps n'est pas dans BOUNDS : c'est un tuple, pas un scalaire. Son
+# domaine vit donc ici. Deux octaves de part et d'autre suffisent largement a
+# un arpege de bruitage, et sans borne une chaine de mutations fait deriver les
+# marches indefiniment — l'utilisateur en enchaine par dizaines.
+ARP_STEP_MIN, ARP_STEP_MAX = -24, 24
+
 
 def _envelope(p: SfxParams, n: int) -> np.ndarray:
     """Volume par trame, 0 = fort. Attaque depuis le silence, palier, chute."""
@@ -356,5 +362,7 @@ def mutate(p: SfxParams, amount: float, locked, seed: int) -> SfxParams:
         setattr(out, key, _clamp(key, value))
 
     if "arp_steps" not in locked and p.arp_steps and rng.random() < amount:
-        out.arp_steps = tuple(int(s + rng.integers(-2, 3)) for s in p.arp_steps)
+        out.arp_steps = tuple(
+            int(max(ARP_STEP_MIN, min(ARP_STEP_MAX, s + rng.integers(-2, 3))))
+            for s in p.arp_steps)
     return out
