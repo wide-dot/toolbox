@@ -62,14 +62,18 @@ def test_tone_survives_the_noise_layer():
     print(f"  note seule {plain:.4f}, avec rythme {mixed:.4f}")
 
 
-def test_noise_layer_refuses_channel_seven():
+def test_noise_layer_refuses_channels_taken_by_rhythm_mode():
+    """Les voies 6, 7 et 8 sont requisitionnees par le mode rythme : une
+    couche bruit dessus effacerait le corps melodique, pas seulement viserait
+    un mauvais registre."""
     noise = [0, rhythm.HITS["BD"]]
-    try:
-        codegen.frames_to_commands(_tone_frames(2), noise=noise, channel=7)
-    except ValueError:
-        print("  voie 7 refusee avec la couche bruit")
-        return
-    raise AssertionError("voie 7 acceptee alors que l'adressage y est faux")
+    for channel in (6, 7, 8):
+        try:
+            codegen.frames_to_commands(_tone_frames(2), noise=noise, channel=channel)
+        except ValueError:
+            continue
+        raise AssertionError(f"voie {channel} acceptee alors qu'elle est requisitionnee")
+    print("  voies 6, 7 et 8 refusees avec la couche bruit")
 
 
 def test_no_noise_means_no_extra_command():
