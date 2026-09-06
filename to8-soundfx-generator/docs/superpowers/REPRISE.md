@@ -31,7 +31,7 @@ l'assembleur ; c'est l'utilisateur qui le colle dans son jeu, quand il veut.
 ## État exact
 
 Branche **`feat/app-creation-bruitages`**, partie de `eabf2c4` sur `main`.
-**Rien n'est poussé.** 23 commits, 60 tests verts, arbre propre.
+**Rien n'est poussé.** 25 commits, 60 tests verts, arbre propre sur `fe44bb0`.
 
 | Tâche | État |
 |---|---|
@@ -42,14 +42,84 @@ Branche **`feat/app-creation-bruitages`**, partie de `eabf2c4` sur `main`.
 | 5 — banque et export des deux `.asm` | **close**, relue |
 | 6 — endpoints du serveur | **close**, relue |
 | 7 — onglet Créer | **close**, relue — *non observée en navigateur* |
-| 8 — CLI, retrait de `parametric.py`, README | à faire |
+| 8 — CLI, retrait de `parametric.py`, README | **close**, relue |
 
 ### Le point d'arrêt précis
 
-**Les sept premières tâches sont closes et relues.** Arbre propre, 60 tests
-verts. Reste la **tâche 8** — ligne de commande, suppression de
-`to8sfx/parametric.py`, mise à jour du README. Son cahier des charges est
-extrait : `task-8-brief.md`.
+**Les huit tâches sont closes et relues.** 25 commits, 60 tests verts, arbre
+propre sur `fe44bb0`. Puis la **relecture finale de branche** a rendu son
+verdict : **non fusionnable en l'état**. Sa vague de correction a été lancée et
+tuée par la limite de session avant d'écrire quoi que ce soit — rien à démêler,
+tout est à faire.
+
+## Vague de correction finale — à faire en reprenant
+
+Huit constats, par ordre d'importance. C'est la relecture d'assemblage qui les a
+vus : chaque tâche était propre isolément, aucune ne pouvait les voir.
+
+**C1 — CRITIQUE. La banque est un cul-de-sac : rien n'en sort.**
+`Bank.to_json` n'est appelé nulle part hors tests. `_bank_view` renvoie pourtant
+`build.asm` et `build.const`, mais `refreshBank()` ne lit que `per_sound`,
+`bytes` et `warnings` : **les deux fichiers assembleur ne sont jamais affichés
+ni copiables**, et aucun endpoint n'exporte le JSON. On garde douze sons, on
+redémarre, tout est perdu — et `cli.py bank` exige un JSON que rien ne produit.
+C'est le deuxième livrable de tête de la spec, sans sortie.
+*Correction :* un `GET /api/bank/export.json`, et trois zones de texte en
+lecture seule dans le panneau Banque (`soundFX.asm`, `soundFX.const.asm`, JSON),
+chacune avec un bouton Copier reprenant le mécanisme existant.
+
+**I1 — La voie YM2413 n'est validée nulle part côté Python.** Reproduit :
+`channel: 42` écrit `; voie YM2413 42` dans le `.asm` sans un mot, et le driver
+ajoutera 42 aux numéros de registres. Le seul garde-fou est un `max="8"` HTML,
+que le navigateur n'impose pas à la saisie clavier.
+*Correction :* `CHANNEL_MIN, CHANNEL_MAX = 0, 8` et `check_any_channel()` dans
+`rhythm.py`, appelée depuis `bank._validate`, `server._render_design`,
+`server._variants` et `cli.py`. `check_channel` doit l'appeler en premier.
+
+**I2 — Trois panneaux déclenchent une erreur 400 en mode Créer.** Les
+`fieldset` **Instrument**, **Mélodique** et **Sortie** sont hors des deux blocs
+`panCreate`/`panWav`, donc visibles partout, et câblés sur `generate()` qui
+poste `mode: 'create'` — refusé par le serveur. Toucher un contrôle affiche un
+bandeau rouge. *Correction :* les déplacer dans `panWav`, puis refaire l'audit
+croisé des `$('id')`.
+
+**I3 — La spec se contredit.** Sa section *Tests* dit encore « refusée au-delà
+de la voie **6** », sa section *Garde-fous* dit 5. Le commit `b07cfa6` a
+rectifié l'une et oublié l'autre.
+
+**I4 — `rhythm.py` dément son propre en-tête**, affirmant encore qu'« une
+explosion enregistrée ne se convertit pas ». Chiffres périmés aussi (0,26 et
+0,12 dans le README). Et « retombe **sous** `$0F` » : à la voie 7 il retombe
+**sur** `$0F`.
+
+**Quatre mineurs jugés à traiter avant fusion :** la docstring du test « pire
+coin » qui revendique une borne qu'il ne fournit pas ; `--category` inconnu qui
+retombe en silence (nommer le repli `libre`, et avertir sur `stderr`) ;
+`mode = params.get("mode", "param")` dont le défaut pointe un mode supprimé ;
+`initCreate()` sans `.catch`.
+
+## Écarts spec ↔ livraison, connus
+
+1. **L'historique** des tirages : absent, rendu approximativement par la rangée
+   de huit variantes.
+2. **Le « tirage libre sur tout l'espace »** : le mécanisme existe mais n'a ni
+   nom ni bouton — atteignable seulement par une faute de frappe.
+3. **`arp_steps` n'est jamais tiré au sort.** L'arpège, que la spec décrit comme
+   le geste le plus caractéristique du son de puce, n'est atteignable que par la
+   catégorie « ramassage » ; le curseur `arp_frames` est inopérant dans sept
+   catégories sur huit. **C'est une décision de conception, pas un bug** : il
+   faut choisir quelles catégories doivent arpéger.
+4. La courbe de bruit est calculée et renvoyée mais jamais dessinée, alors que
+   la maquette de la spec montre une piste « bruit ».
+
+## Ce que la relecture finale a confirmé comme sain
+
+Le budget de 255 commandes tient sur tous les chemins (300 mutations enchaînées
+plafonnent à 255 exactement). La limite de voie de la couche bruit est appliquée
+à trois endroits indépendants et jamais écrite en dur. **L'ordre de la table et
+celui des identifiants ne peuvent pas diverger** — un seul producteur, une seule
+énumération, doublons interdits. Aucun test creux parmi les 60. Périmètre
+respecté : pas une ligne hors de `to8-soundfx-generator/`.
 
 ## À essayer devant la page — personne ne l'a fait
 
@@ -146,7 +216,7 @@ aller plus vite.
 
 ```sh
 cd toolbox/to8-soundfx-generator
-git log --oneline eabf2c4..HEAD     # les 23 commits
+git log --oneline eabf2c4..HEAD     # les 25 commits
 python3 -m tests                    # doit donner 60 OK
 cat ../.superpowers/sdd/2026-09-06-app-creation-bruitages/progress.md
 ```
