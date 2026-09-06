@@ -220,3 +220,141 @@ def _noise_track(p: SfxParams, n: int) -> list[int] | None:
         pos = max(0, min(n - 1, pos))
         track[pos] |= rhythm.HITS[kit[k % len(kit)]]
     return track
+
+
+# --- Categories -------------------------------------------------------------
+#
+# Une categorie est un a priori sur l'espace des parametres : quelles couches
+# sont actives, et dans quelles plages tirer. Ce sont des EVENEMENTS DE JEU, pas
+# des familles de synthese — c'est ce qui rend le tirage utile : on cherche
+# "une explosion", pas "un balayage descendant avec du jitter".
+#
+# `ranges` remplace la borne globale de BOUNDS pendant le tirage ; `fixed` force
+# une valeur. Ce qui n'est cite ni dans l'un ni dans l'autre garde le defaut.
+
+CATEGORIES: dict[str, dict] = {
+    "tir": {
+        "label": "Tir",
+        "ranges": {"attack_frames": (0, 1), "hold_frames": (0, 2),
+                   "decay_frames": (3, 10), "f_start": (1200, 4000),
+                   "slide": (-2.5, -0.8), "slide_delta": (0.0, 0.06),
+                   "instrument": (12, 15), "jitter_cents": (0, 60)},
+        "fixed": {"vol_peak": 1, "vol_end": 14, "noise_on": False},
+    },
+    "explosion": {
+        "label": "Explosion",
+        "ranges": {"attack_frames": (0, 1), "hold_frames": (0, 3),
+                   "decay_frames": (15, 45), "f_start": (200, 700),
+                   "slide": (-0.6, -0.1), "jitter_cents": (250, 900),
+                   "instrument": (13, 14), "noise_hits": (10, 30),
+                   "noise_spread_frames": (12, 45), "noise_accel": (-1.0, -0.4),
+                   "noise_pitch": (0, 5), "noise_vol": (0, 5)},
+        "fixed": {"vol_peak": 0, "vol_end": 15, "noise_on": True,
+                  "noise_kit": ("BD", "SD", "TOM")},
+    },
+    "impact": {
+        "label": "Impact",
+        "ranges": {"attack_frames": (0, 1), "hold_frames": (0, 1),
+                   "decay_frames": (4, 14), "f_start": (120, 500),
+                   "slide": (-1.5, -0.3), "jitter_cents": (100, 400),
+                   "instrument": (13, 14), "noise_hits": (1, 4),
+                   "noise_spread_frames": (1, 4), "noise_pitch": (0, 6),
+                   "noise_vol": (0, 4)},
+        "fixed": {"vol_peak": 0, "vol_end": 15, "noise_on": True,
+                  "noise_kit": ("BD", "TOM")},
+    },
+    "ramassage": {
+        "label": "Ramassage",
+        "ranges": {"attack_frames": (0, 1), "hold_frames": (1, 4),
+                   "decay_frames": (4, 12), "f_start": (500, 1400),
+                   "slide": (0.0, 0.8), "arp_frames": (1, 3),
+                   "instrument": (10, 12)},
+        "fixed": {"vol_peak": 2, "vol_end": 12, "noise_on": False,
+                  "arp_steps": (0, 4, 7, 12), "arp_retrigger": True},
+    },
+    "saut": {
+        "label": "Saut",
+        "ranges": {"attack_frames": (0, 1), "hold_frames": (0, 2),
+                   "decay_frames": (5, 14), "f_start": (200, 600),
+                   "slide": (0.6, 2.2), "slide_delta": (-0.08, 0.0),
+                   "instrument": (10, 15)},
+        "fixed": {"vol_peak": 2, "vol_end": 13, "noise_on": False},
+    },
+    "degat": {
+        "label": "Degat",
+        "ranges": {"attack_frames": (0, 1), "hold_frames": (0, 2),
+                   "decay_frames": (15, 40), "f_start": (90, 300),
+                   "slide": (-0.8, -0.2), "jitter_cents": (60, 250),
+                   "instrument": (13, 14)},
+        "fixed": {"vol_peak": 1, "vol_end": 15, "noise_on": False},
+    },
+    "menu": {
+        "label": "Menu",
+        "ranges": {"attack_frames": (0, 1), "hold_frames": (1, 3),
+                   "decay_frames": (2, 6), "f_start": (700, 2200),
+                   "slide": (-0.3, 0.3), "instrument": (10, 12)},
+        "fixed": {"vol_peak": 3, "vol_end": 12, "noise_on": False},
+    },
+    "alarme": {
+        "label": "Alarme",
+        "ranges": {"attack_frames": (0, 2), "hold_frames": (10, 30),
+                   "decay_frames": (2, 8), "f_start": (400, 1100),
+                   "slide": (-0.05, 0.05), "vibrato_hz": (4, 12),
+                   "vibrato_cents": (300, 900), "repeat_frames": (0, 20),
+                   "instrument": (5, 8)},
+        "fixed": {"vol_peak": 2, "vol_end": 4, "noise_on": False},
+    },
+}
+
+
+def _draw(rng, key, lo, hi):
+    if key in INT_PARAMS:
+        return int(rng.integers(int(lo), int(hi) + 1))
+    return float(rng.uniform(lo, hi))
+
+
+def _clamp(key, value):
+    lo, hi = BOUNDS[key]
+    v = max(lo, min(hi, value))
+    return int(round(v)) if key in INT_PARAMS else float(v)
+
+
+def randomize(category: str, seed: int) -> SfxParams:
+    """Tire un son dans l'a priori d'une categorie. Deterministe a graine donnee."""
+    cat = CATEGORIES.get(category)
+    if cat is None:
+        cat = {"ranges": {}, "fixed": {}}
+    rng = np.random.default_rng(seed)
+
+    p = SfxParams(seed=int(seed))
+    ranges = cat.get("ranges", {})
+    for key in BOUNDS:
+        lo, hi = ranges.get(key, BOUNDS[key])
+        setattr(p, key, _clamp(key, _draw(rng, key, lo, hi)))
+    for key, value in cat.get("fixed", {}).items():
+        setattr(p, key, value)
+    return p
+
+
+def mutate(p: SfxParams, amount: float, locked, seed: int) -> SfxParams:
+    """Perturbe chaque parametre non verrouille, en restant dans ses bornes.
+
+    Le cadenas est ce qui permet de converger : on fige ce qui est bon et on
+    relance le hasard sur le reste. Sans lui, chaque mutation defait le
+    precedent progres.
+    """
+    locked = set(locked or ())
+    rng = np.random.default_rng(seed)
+    out = SfxParams.from_dict(p.to_dict())
+    out.seed = int(seed)
+
+    for key, (lo, hi) in BOUNDS.items():
+        if key in locked:
+            continue
+        span = (hi - lo) * float(amount)
+        value = getattr(p, key) + rng.normal(0.0, span / 3.0)
+        setattr(out, key, _clamp(key, value))
+
+    if "arp_steps" not in locked and p.arp_steps and rng.random() < amount:
+        out.arp_steps = tuple(int(s + rng.integers(-2, 3)) for s in p.arp_steps)
+    return out
