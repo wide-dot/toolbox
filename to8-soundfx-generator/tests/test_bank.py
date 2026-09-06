@@ -86,10 +86,20 @@ def test_duplicate_names_are_refused():
 def test_json_round_trip():
     b = _bank()
     again = bank.Bank.from_json(b.to_json())
+    assert again.name == b.name
     assert again.default_channel == b.default_channel
-    assert [s.name for s in again.sounds] == [s.name for s in b.sounds]
-    assert again.sounds[0].params.to_dict() == b.sounds[0].params.to_dict()
-    print("  aller-retour JSON conforme")
+    assert len(again.sounds) == len(b.sounds)
+    for avant, apres in zip(b.sounds, again.sounds):
+        # Tous les champs, pas seulement le nom : une surcharge de voie perdue
+        # au rechargement serait remplacee en silence par la voie par defaut,
+        # et le son sortirait sur la mauvaise voie sans que rien ne le dise.
+        assert apres.name == avant.name
+        assert apres.channel == avant.channel, (
+            f"{avant.name} : voie {apres.channel} relue, {avant.channel} ecrite")
+        assert apres.priority == avant.priority
+        assert apres.category == avant.category
+        assert apres.params.to_dict() == avant.params.to_dict()
+    print(f"  {len(again.sounds)} sons, tous les champs conserves")
 
 
 def test_from_json_rejects_arp_steps_out_of_bounds():
@@ -109,6 +119,21 @@ def test_from_json_rejects_arp_steps_out_of_bounds():
         print("  marche d'arpege hors domaine refusee au chargement")
         return
     raise AssertionError("marches d'arpege hors domaine acceptees en silence")
+
+
+def test_noise_sound_carries_its_warning_in_the_asm():
+    """Un bruitage qui bascule la puce en mode rythme requisitionne les voies 6
+    a 8. Si la musique du jeu s'en sert, son etat de batterie est ecrase. Cet
+    avertissement doit voyager avec le code genere, pas rester dans l'interface.
+    """
+    b = bank.Bank(default_channel=4)          # voie valide, contrairement au
+    p = design.randomize("explosion", seed=5)  # test qui verifie le refus
+    p.noise_on = True
+    b.sounds.append(bank.BankSound(name="Boum", category="explosion", params=p))
+    out = b.build()
+    assert "ATTENTION" in out["asm"], "l'avertissement n'est pas dans l'assembleur"
+    assert "rythme" in out["asm"].lower()
+    print("  avertissement de couche bruit present dans le bloc genere")
 
 
 if __name__ == "__main__":
