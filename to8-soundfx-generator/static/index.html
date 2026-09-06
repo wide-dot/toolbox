@@ -10,6 +10,17 @@
     --accent:#6fd0a8; --warn:#e8b04b; --err:#e8685b; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
+  /* Barres de defilement sombres. color-scheme suffit a Firefox et aux
+     navigateurs recents ; les regles -webkit- couvrent Safari et Chrome, qui
+     rendaient sinon une barre claire au milieu d'une page sombre. */
+  html{color-scheme:dark}
+  *{scrollbar-width:thin;scrollbar-color:#3a4150 transparent}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:#3a4150;border-radius:6px;
+    border:2px solid var(--bg)}
+  ::-webkit-scrollbar-thumb:hover{background:#4d5668}
+  ::-webkit-scrollbar-corner{background:transparent}
   /* La page ne defile pas : chaque colonne defile chez elle. Avec une grille en
      min-height, c'etait la page entiere qui s'allongeait, et descendre dans les
      reglages faisait sortir les courbes de l'ecran. */
