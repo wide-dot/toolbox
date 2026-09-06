@@ -31,14 +31,14 @@ l'assembleur ; c'est l'utilisateur qui le colle dans son jeu, quand il veut.
 ## État exact
 
 Branche **`feat/app-creation-bruitages`**, partie de `eabf2c4` sur `main`.
-**Rien n'est poussé.** 11 commits, 47 tests verts.
+**Rien n'est poussé.** 13 commits, 47 tests verts, arbre propre.
 
 | Tâche | État |
 |---|---|
 | 1 — section rythme et adressage (`rhythm.py`) | **close**, relue |
 | 2 — piste de bruit dans `codegen.py` | **close**, relue |
 | 3 — modèle de son (`design.py`) | **close**, relue |
-| 4 — catégories, tirage, mutation | **en cours de correction** — voir ci-dessous |
+| 4 — catégories, tirage, mutation | corrigée et commitée, **re-relecture non faite** |
 | 5 — banque et export des deux `.asm` | à faire |
 | 6 — endpoints du serveur | à faire |
 | 7 — onglet Créer | à faire |
@@ -46,33 +46,36 @@ Branche **`feat/app-creation-bruitages`**, partie de `eabf2c4` sur `main`.
 
 ### Le point d'arrêt précis
 
-La tâche 4 était **implémentée et relue** (conformité ✅), et une ronde de
-correction était **en vol** au moment de l'arrêt. `to8sfx/design.py` et
-`tests/test_design.py` ont des modifications **non commitées** : c'est ce
-correctif, inachevé.
+La tâche 4 est **implémentée, relue, et sa ronde de correction est commitée**
+(`763d654`). Arbre propre, 47 tests verts.
 
-À la reprise, deux options :
+**Ce qui manque, et c'est la première chose à faire en reprenant : la
+re-relecture ciblée de cette ronde.** Le dispositif l'exige — une ronde de
+correction n'est close qu'après vérification que chaque constat est traité et
+qu'aucune casse n'a été introduite. Elle porte sur le diff `2ed3342..763d654`.
 
-- `git diff` pour voir ce qui a été fait, terminer à la main, committer ;
-- ou `git checkout -- to8sfx/design.py tests/test_design.py` pour repartir du
-  commit `2ed3342` et refaire la ronde proprement.
+Les cinq constats corrigés, à vérifier :
 
-Le contenu de la correction demandée est dans le registre (ruling R12 et R13)
-et détaillé ici :
+1. `ARP_STEP_MIN, ARP_STEP_MAX = -24, 24` déclarés à côté de `BOUNDS`, et clamp
+   dans `mutate` — `arp_steps` n'était borné nulle part.
+2. `test_arp_steps_are_locked_and_bounded` — l'ancien test des cadenas mutait
+   `"explosion"`, dont `arp_steps` vaut `()`, donc la branche n'était jamais
+   exercée. Le nouveau utilise `"ramassage"` et enchaîne 200 mutations.
+   Falsifiabilité prouvée : clamp retiré, échec `marche -25 hors domaine apres
+   86 mutations`.
+3. `test_randomize_stays_inside_the_category_ranges` — rien ne vérifiait les
+   plages *propres* à une catégorie.
+4. `test_mutate_is_deterministic` — seul `randomize` l'était.
+5. `test_every_category_fits_the_budget_at_its_worst_corner` — le test
+   statistique est conservé, doublé d'un test de coin construit.
 
-1. **`arp_steps` n'est borné nulle part.** `BOUNDS` ne couvre que les scalaires,
-   et `mutate` ajoute ±2 demi-tons sans clamper : une chaîne de mutations fait
-   dériver les marches hors du domaine −24..+24 annoncé. Déclarer
-   `ARP_STEP_MIN, ARP_STEP_MAX = -24, 24` et clamper.
-2. **Le test des cadenas n'exerce jamais la branche `arp_steps`** : il mute
-   `"explosion"`, dont `arp_steps` vaut `()`. Utiliser `"ramassage"`, qui fixe
-   `(0, 4, 7, 12)`, et enchaîner 200 mutations en vérifiant le domaine.
-3. **Rien ne vérifie que `randomize` respecte les plages propres à une
-   catégorie** — seulement les bornes globales.
-4. **Le déterminisme de `mutate` n'est pas testé**, seulement celui de
-   `randomize`.
-5. **Le test de budget est un échantillonnage, pas une borne.** Le garder, et
-   ajouter un test qui *construit* le pire coin de chaque catégorie.
+**Une réserve honnête de l'implémenteur, à trancher.** Le pire coin construit
+donne 106 commandes pour `explosion`, *moins* que le pic de 176 observé par
+l'échantillonnage : le coin ne force que cinq paramètres (durée, frappes,
+étalement, arpège) et laisse les autres — `jitter_cents` notamment — au tirage
+de la graine 0. Les deux tests sont donc **complémentaires**, aucun n'est
+strictement plus sévère que l'autre. Mon arbitrage R13 supposait le contraire ;
+il est à corriger. Aucune plage n'a eu besoin d'être resserrée.
 
 ## Les arbitrages rendus, et ce qu'ils coûtent s'ils sont faux
 
@@ -125,7 +128,7 @@ aller plus vite.
 
 ```sh
 cd toolbox/to8-soundfx-generator
-git log --oneline eabf2c4..HEAD     # les 11 commits
+git log --oneline eabf2c4..HEAD     # les 13 commits
 python3 -m tests                    # doit donner 47 OK
 cat ../.superpowers/sdd/2026-09-06-app-creation-bruitages/progress.md
 ```
