@@ -1,6 +1,6 @@
-# Où en est l'app de création de bruitages — reprise
+# L'app de création de bruitages — état
 
-*Arrêt le 6 septembre 2026, plus de budget de session.*
+*Fusionnée dans `main` le 6 septembre 2026.*
 
 ## En un paragraphe
 
@@ -21,12 +21,13 @@ l'assembleur ; c'est l'utilisateur qui le colle dans son jeu, quand il veut.
    C'est l'autorité. En cas de conflit avec le plan, elle tranche.
 2. **Le plan** — `docs/superpowers/plans/2026-09-06-app-creation-bruitages.md`
    8 tâches, 49 étapes, code et tests complets pour chacune.
-3. **Le registre** — `../../.superpowers/sdd/2026-09-06-app-creation-bruitages/progress.md`
-   (chemin absolu : `toolbox/.superpowers/sdd/2026-09-06-app-creation-bruitages/`)
-   L'avancement réel, et **tous les arbitrages rendus**. C'est lui qui fait foi,
-   pas la mémoire de la session. Il contient aussi les cahiers des charges
-   extraits (`task-N-brief.md`) et les rapports d'implémentation
-   (`task-N-report.md`).
+3. **L'historique git** — la branche a été fusionnée dans `main` en rebase, ses
+   45 commits y sont. C'est lui le registre désormais : chaque message explique
+   le *pourquoi*, et plusieurs portent des mesures relevées sur l'émulateur qu'on
+   ne retrouve nulle part ailleurs. L'espace de travail temporaire qui servait
+   pendant le chantier (cahiers des charges, rapports, journal) a été supprimé
+   après la fusion ; les 17 arbitrages qui changeaient quelque chose au produit
+   sont recopiés plus bas.
 
 ## État exact
 
