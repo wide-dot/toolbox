@@ -342,7 +342,13 @@
   <textarea id="asm" spellcheck="false" readonly></textarea>
   <textarea id="bankAsm" spellcheck="false" readonly class="hide"></textarea>
   <textarea id="bankConst" spellcheck="false" readonly class="hide"></textarea>
-  <textarea id="bankJson" spellcheck="false" readonly class="hide"></textarea>
+  <textarea id="bankJson" spellcheck="false" class="hide"></textarea>
+  <div class="bar hide" id="bankJsonBar" style="margin-top:8px">
+    <button class="ghost" id="loadBank">Charger cette banque</button>
+    <span class="hint">Colle ici un <code>banque.json</code> garde de c&ocirc;t&eacute; pour
+      retrouver tes sons <b>et leurs r&eacute;glages</b>. L'assembleur, lui, ne permet
+      pas de remonter aux param&egrave;tres.</span>
+  </div>
   <div id="listenWrap" class="hide">
     <div class="bar" style="margin-bottom:8px">
       <button class="act" id="doListen">&#9654; &Eacute;couter</button>
@@ -961,8 +967,19 @@ async function refreshBank(){
   lignes.forEach(s => {
     const d = document.createElement('div');
     d.style.cssText = 'display:flex;gap:6px;align-items:center';
-    const t = document.createElement('span');
-    t.style.flex = '1';
+    const t = document.createElement('button');
+    t.className = 'chip';
+    t.style.cssText = 'flex:1;text-align:left';
+    t.title = 'reprendre ce son dans l\'editeur';
+    // Le retour vers les reglages passe par la banque, jamais par l'assembleur.
+    t.onclick = () => {
+      const src = b.sounds[s.index];
+      if (!src) return;
+      CUR = src.params;
+      $('sndName').value = src.name;
+      $('sndChannel').value = src.channel === null ? '' : src.channel;
+      paintParams(); render();
+    };
     t.textContent = `${s.index} ${s.name} — voie ${s.channel}, ${s.commands} cmd, ${s.bytes} o`
       + (s.truncated ? '  ⚠ TRONQUE' : '');
     const x = document.createElement('button');
@@ -984,8 +1001,10 @@ async function refreshBank(){
   // Les deux fichiers et le JSON, copiables : c'est la sortie de tout l'outil.
   $('bankAsm').value = b.build.asm || '';
   $('bankConst').value = b.build.const || '';
-  $('bankJson').value = b.sounds.length
-    ? await (await fetch('/api/bank/export.json')).text() : '';
+  if (document.activeElement !== $('bankJson')){
+    $('bankJson').value = b.sounds.length
+      ? await (await fetch('/api/bank/export.json')).text() : '';
+  }
   (b.build.warnings || []).forEach(w => {
     const d = document.createElement('div'); d.style.color = '#e8a33d'; d.textContent = '⚠ ' + w;
     el.appendChild(d);
@@ -1077,9 +1096,18 @@ function montrerSortie(champ){
   for (const [bouton, zone] of ONGLETS){
     $(bouton).classList.toggle('on', zone === champ);
     $(zone).classList.toggle('hide', zone !== champ);
+    $('bankJsonBar').classList.toggle('hide', champ !== 'bankJson');
   }
 }
 for (const [bouton, zone] of ONGLETS) $(bouton).onclick = () => montrerSortie(zone);
+
+$('loadBank').onclick = async () => {
+  const d = await post('/api/bank/import', {json: $('bankJson').value});
+  if (d.error){ showMsgs([d.error], true); return; }
+  await refreshBank();
+  showMsgs([`Banque chargee : ${d.sounds.length} son(s). Cliquer une ligne pour `
+            + `reprendre ce son avec ses reglages.`]);
+};
 
 // ---------- reactivite ----------
 $('instrument_mode').onchange = e => {

@@ -389,6 +389,25 @@ def _bank_add(params: dict) -> dict:
     return _bank_view()
 
 
+def _bank_import(params: dict) -> dict:
+    """Recharge une banque depuis son JSON.
+
+    C'est le seul chemin de retour vers les REGLAGES d'un son : l'assembleur
+    genere ne contient que des ecritures de registres, la transformation qui y
+    mene deduplique et compresse, et rien ne permet de remonter aux parametres.
+    Le JSON, lui, porte les parametres et pas les donnees rendues — c'est ce qui
+    rend un son modifiable des semaines plus tard.
+    """
+    texte = params.get("json") or ""
+    if not texte.strip():
+        raise ValueError("coller le contenu d'un banque.json avant de charger.")
+    nouvelle = bank_mod.Bank.from_json(texte)
+    nouvelle.build()  # valider avant de remplacer ce qui est en place
+    with LOCK:
+        STATE["bank"] = nouvelle
+    return _bank_view()
+
+
 def _bank_remove(params: dict) -> dict:
     b = _bank()
     i = int(params.get("index", -1))
@@ -569,6 +588,9 @@ class Handler(BaseHTTPRequestHandler):
 
             if path == "/api/bank/add":
                 return self._json(_bank_add(json.loads(body or b"{}")))
+
+            if path == "/api/bank/import":
+                return self._json(_bank_import(json.loads(body or b"{}")))
 
             if path == "/api/bank/remove":
                 return self._json(_bank_remove(json.loads(body or b"{}")))
