@@ -31,7 +31,7 @@ l'assembleur ; c'est l'utilisateur qui le colle dans son jeu, quand il veut.
 ## État exact
 
 Branche **`feat/app-creation-bruitages`**, partie de `eabf2c4` sur `main`.
-**Rien n'est poussé.** 20 commits, 60 tests verts, arbre propre.
+**Rien n'est poussé.** 23 commits, 60 tests verts, arbre propre.
 
 | Tâche | État |
 |---|---|
@@ -41,24 +41,43 @@ Branche **`feat/app-creation-bruitages`**, partie de `eabf2c4` sur `main`.
 | 4 — catégories, tirage, mutation | **close**, relue |
 | 5 — banque et export des deux `.asm` | **close**, relue |
 | 6 — endpoints du serveur | **close**, relue |
-| 7 — onglet Créer | à faire |
+| 7 — onglet Créer | **close**, relue — *non observée en navigateur* |
 | 8 — CLI, retrait de `parametric.py`, README | à faire |
 
 ### Le point d'arrêt précis
 
-**Les six premières tâches sont closes et relues.** Arbre propre, 60 tests
-verts. La reprise commence à la **tâche 7** — l'onglet Créer. Son cahier des
-charges est extrait : `task-7-brief.md`, régénéré sur le plan corrigé.
+**Les sept premières tâches sont closes et relues.** Arbre propre, 60 tests
+verts. Reste la **tâche 8** — ligne de commande, suppression de
+`to8sfx/parametric.py`, mise à jour du README. Son cahier des charges est
+extrait : `task-8-brief.md`.
 
-**À porter dans la dispatch de la tâche 7 (ruling R3) :** le plan y appelle
-`show(d)`, `play(url)` et un panneau `panCreate` en ajoutant « adapter si les
-noms diffèrent » — c'est un placeholder. Les vrais noms : le panneau existant
-s'appelle `panParam` (à renommer `panCreate`), il n'y a ni `show` ni `play`, la
-peinture est en ligne dans `generate()` et la lecture passe par
-`audioOut = new Audio()`. Il faut extraire un `paint(d)` appelé par les deux
-chemins et ajouter un `play(url)`.
+## À essayer devant la page — personne ne l'a fait
 
-**Aussi :** un test de la tâche 4
+Aucun agent n'avait de navigateur : l'interface a été vérifiée par les
+extrémités (appels HTTP réels, audit statique du DOM et du JS), **jamais
+observée**. Lance `./run.sh` et vérifie, dans cet ordre :
+
+1. La page charge sans erreur console, **Créer** est l'onglet ouvert par défaut,
+   les catégories et les kits sont peuplés.
+2. **Tirer au sort** donne un son différent à chaque clic, et il se joue.
+3. **Muter** affiche huit variantes ; un clic les écoute, un second l'adopte.
+4. Un cadenas coché fige visuellement son curseur pendant une mutation.
+5. **Garder dans la banque** ajoute une ligne avec sa voie et ses octets.
+6. Cocher « Activer les percussions » avec une voie déjà à 7 : le champ doit se
+   ramener à 5 au moment du cochage. Puis taper 7 au clavier alors que le bruit
+   est actif : le champ reste à 7 (défaut mineur connu), mais le rendu suivant
+   doit afficher **un message d'erreur lisible**, pas geler.
+7. Glisser vite un curseur d'« Affiner » : un seul rendu à la fois, et c'est la
+   position finale qui s'entend.
+8. Cliquer dans la zone de l'assembleur et appuyer sur espace : ça doit insérer
+   un espace, pas relancer un rendu.
+9. **L'onglet Fichier audio doit se comporter exactement comme avant** — dépose
+   d'un fichier, forme d'onde, sélection à la souris, génération, écoute.
+
+C'est le point 9 qui compte le plus : c'est la seule contrainte de tout ce
+chantier qu'aucun test ne rattrape.
+
+**Note pour la tâche 8 :** un test de la tâche 4
 s'appelle « pire coin » alors qu'il n'en construit qu'un partiel (voir R13 plus
 bas). Nom trompeur, à corriger si l'occasion se présente.
 
@@ -127,7 +146,7 @@ aller plus vite.
 
 ```sh
 cd toolbox/to8-soundfx-generator
-git log --oneline eabf2c4..HEAD     # les 20 commits
+git log --oneline eabf2c4..HEAD     # les 23 commits
 python3 -m tests                    # doit donner 60 OK
 cat ../.superpowers/sdd/2026-09-06-app-creation-bruitages/progress.md
 ```
