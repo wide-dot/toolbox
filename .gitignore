@@ -9,3 +9,11 @@ buildNumber.properties
 .mvn/timing.properties
 # https://github.com/takari/maven-wrapper#usage-without-binary-jar
 .mvn/wrapper/maven-wrapper.jar
+
+# Scories de macOS. Sans ca elles apparaissent dans le `git status` de chaque
+# contributeur sur Mac, et finissent par etre commitees par inadvertance. Le
+# motif sans barre oblique s'applique a tous les niveaux du depot.
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
