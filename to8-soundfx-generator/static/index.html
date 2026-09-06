@@ -808,9 +808,20 @@ function buildSliders(){
       `style="width:100%;margin-top:2px">`;
     box.appendChild(row);
   }
-  box.oninput = e => {
-    const key = e.target.dataset.p || e.target.dataset.v;
-    if (!key) return;
+  // Les gestionnaires sont poses sur le DOCUMENT et non sur le conteneur : une
+  // ligne peut etre deplacee ailleurs dans la page — inst_frames vit sous les
+  // bandes — et la delegation depuis le conteneur cessait alors de la voir.
+  brancherReglages();
+}
+
+let reglagesBranches = false;
+function brancherReglages(){
+  if (reglagesBranches) return;
+  reglagesBranches = true;
+
+  document.addEventListener('input', e => {
+    const key = e.target.dataset && (e.target.dataset.p || e.target.dataset.v);
+    if (!key || !INIT.bounds[key]) return;
     const [lo, hi] = INIT.bounds[key];
     let val = +e.target.value;
     if (e.target.value === '' || !isFinite(val)) return;  // frappe en cours
@@ -824,14 +835,18 @@ function buildSliders(){
     if (nb && e.target !== nb) nb.value = fmt(key, CUR[key]);
     if (key === 'instrument') paintInstrumentName();
     render();
-  };
+  });
+
   // Une valeur tapee hors bornes serait restee affichee telle quelle, en
   // contradiction avec ce qui a ete rendu : on la ramene a la validation.
-  box.addEventListener('blur', e => { if (e.target.dataset.v) paintParams(); }, true);
-  box.onchange = e => {
-    const k = e.target.dataset.lock;
+  document.addEventListener('blur', e => {
+    if (e.target.dataset && e.target.dataset.v) paintParams();
+  }, true);
+
+  document.addEventListener('change', e => {
+    const k = e.target.dataset && e.target.dataset.lock;
     if (k) { e.target.checked ? LOCKED.add(k) : LOCKED.delete(k); }
-  };
+  });
 }
 
 // Un curseur qui ne peut rien changer doit le dire. Les reglages de bruit sont
