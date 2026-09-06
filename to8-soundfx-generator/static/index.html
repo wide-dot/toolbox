@@ -10,15 +10,26 @@
     --accent:#6fd0a8; --warn:#e8b04b; --err:#e8685b; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
-  header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  /* La page ne defile pas : chaque colonne defile chez elle. Avec une grille en
+     min-height, c'etait la page entiere qui s'allongeait, et descendre dans les
+     reglages faisait sortir les courbes de l'ecran. */
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;
+    display:flex;flex-direction:column;overflow:hidden}
+  header{flex:0 0 auto;padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
   header h1{margin:0;font-size:15px;font-weight:650;letter-spacing:.2px}
   header .sub{color:var(--dim);font-size:12px}
-  .wrap{display:grid;grid-template-columns:340px 1fr;gap:0;min-height:calc(100vh - 52px)}
-  .side{border-right:1px solid var(--line);padding:14px 16px;overflow-y:auto}
-  .main{padding:14px 20px;min-width:0}
+  .wrap{display:grid;grid-template-columns:340px 1fr;gap:0;flex:1 1 auto;min-height:0}
+  .side{border-right:1px solid var(--line);padding:14px 16px;overflow-y:auto;min-height:0}
+  .main{padding:14px 20px;min-width:0;overflow-y:auto;min-height:0}
   fieldset{border:1px solid var(--line);border-radius:8px;padding:10px 12px 12px;margin:0 0 12px}
   legend{padding:0 6px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+  .side legend{cursor:pointer;user-select:none}
+  .side legend:hover{color:var(--accent)}
+  .side legend::before{content:'\25BE\00a0'}
+  .side fieldset.shut legend::before{content:'\25B8\00a0'}
+  .side fieldset.shut > .fbody{display:none}
+  .side fieldset.shut{padding-bottom:4px}
   label{display:block;margin:8px 0 2px;color:var(--dim);font-size:11.5px}
   input[type=text],input[type=number],select{width:100%;background:#12141a;border:1px solid var(--line);
     color:var(--ink);border-radius:6px;padding:6px 8px;font:inherit}
@@ -307,6 +318,33 @@
 
 <script>
 const $ = id => document.getElementById(id);
+
+// Chaque bloc de la barre laterale se replie par sa legende. Le contenu est
+// enveloppe une fois pour toutes : deplacer des noeuds a l'interieur du meme
+// fieldset ne change aucun identifiant, donc rien de ce qui suit n'en depend.
+// L'etat est retenu d'une visite a l'autre — on ne veut pas replier les memes
+// blocs a chaque rechargement.
+function setupFoldables(){
+  let etat = {};
+  try { etat = JSON.parse(localStorage.getItem('to8sfx.folds') || '{}'); } catch (e) {}
+  const blocs = document.querySelectorAll('.side fieldset');
+  blocs.forEach((fs, i) => {
+    const lg = fs.querySelector('legend');
+    if (!lg) return;
+    const cle = 'f' + i;
+    const corps = document.createElement('div');
+    corps.className = 'fbody';
+    while (lg.nextSibling) corps.appendChild(lg.nextSibling);
+    fs.appendChild(corps);
+    if (etat[cle]) fs.classList.add('shut');
+    lg.onclick = () => {
+      fs.classList.toggle('shut');
+      etat[cle] = fs.classList.contains('shut');
+      try { localStorage.setItem('to8sfx.folds', JSON.stringify(etat)); } catch (e) {}
+    };
+  });
+}
+setupFoldables();
 let INSTS = {}, hasSource = false, lastPreview = null;
 let audioOut = new Audio(), audioSrc = new Audio();
 let SRC = null;                 // {duration, peaks, voiced} du fichier charge
