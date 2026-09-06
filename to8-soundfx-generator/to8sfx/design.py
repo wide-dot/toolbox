@@ -17,7 +17,7 @@ l'enveloppe qui la compose.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, fields
 
 import numpy as np
 
@@ -41,7 +41,11 @@ class SfxParams:
     f_start: float = 900.0
     slide: float = -0.6        # demi-tons par trame
     slide_delta: float = 0.0   # demi-ton par trame au carre : l'inflexion
-    pitch_curve: str = "exp"
+    # Pas de pitch_curve ici (contrairement a l'ancien mode parametrique) :
+    # la hauteur est en demi-tons (midi0 + slide*t + 1/2*slide_delta*t**2),
+    # donc deja sur une echelle logarithmique. Un choix exp/lin n'aurait pas
+    # de sens : slide en demi-tons par trame ne veut rien dire sur une
+    # interpolation lineaire en hertz.
 
     # --- modulations ---
     vibrato_hz: float = 0.0
@@ -126,14 +130,20 @@ def _envelope(p: SfxParams, n: int) -> np.ndarray:
     i = 0
     if p.attack_frames > 0:
         k = min(p.attack_frames, n)
-        vol[:k] = np.linspace(15.0, float(p.vol_peak), k, endpoint=False)
+        # k + 1 points puis on jette le premier : la rampe ATTEINT le pic sur sa
+        # derniere trame. Avec endpoint=False, une attaque d'une seule trame
+        # rendait [15] -- silence franc -- et le son ne demarrait qu'a la trame
+        # suivante. C'est le cas par defaut du dataclass.
+        vol[:k] = np.linspace(15.0, float(p.vol_peak), k + 1)[1:]
         i = k
     if p.hold_frames > 0 and i < n:
         k = min(p.hold_frames, n - i)
         vol[i:i + k] = float(p.vol_peak)
         i += k
     if i < n:
-        vol[i:] = np.linspace(float(p.vol_peak), float(p.vol_end), n - i)
+        # meme raison : une chute d'une seule trame doit rejoindre vol_end,
+        # pas rester au pic.
+        vol[i:] = np.linspace(float(p.vol_peak), float(p.vol_end), n - i + 1)[1:]
     return np.clip(np.round(vol), 0, 15).astype(int)
 
 
@@ -184,10 +194,10 @@ def render(p: SfxParams) -> tuple[list[Frame], list[int] | None]:
         frames.append(Frame(True, fnum, block, int(vol[i]),
                             int(p.instrument), bool(attack_flags[i])))
 
-    return frames, _noise_track(p, n, rng)
+    return frames, _noise_track(p, n)
 
 
-def _noise_track(p: SfxParams, n: int, rng) -> list[int] | None:
+def _noise_track(p: SfxParams, n: int) -> list[int] | None:
     """Rafale de frappes, dont la densite s'accelere ou retombe.
 
     Les instants sont tires sur une courbe de puissance u**gamma : un exposant
