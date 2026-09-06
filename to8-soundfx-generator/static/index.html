@@ -127,7 +127,7 @@
       <div class="hint"><b>Attention</b>&nbsp;: le registre $0E requisitionne les voies
         6, 7 et 8 de la puce. Si la musique du jeu s'en sert &mdash; c'est le cas de
         battlesquadron &mdash; son &eacute;tat de batterie sera &eacute;cras&eacute; pendant le
-        bruitage. Voies utilisables&nbsp;: 0 &agrave; 5.</div>
+        bruitage. Voies utilisables&nbsp;: 0 &agrave; <span id="maxNoiseChan">5</span>.</div>
       <div id="kit" class="row" style="flex-wrap:wrap;gap:6px"></div>
     </fieldset>
 
@@ -613,6 +613,7 @@ let INIT = null, CUR = null, LOCKED = new Set(), CAT = 'tir', VARIANTS = [], pla
 
 async function initCreate(){
   INIT = await (await fetch('/api/design/init')).json();
+  $('maxNoiseChan').textContent = INIT.max_noise_channel;
   const cats = $('cats');
   for (const [k, label] of Object.entries(INIT.categories)){
     const b = document.createElement('button');
@@ -673,6 +674,18 @@ function paintParams(){
   $('noise_on').checked = !!CUR.noise_on;
   for (const c of document.querySelectorAll('[data-kit]'))
     c.checked = (CUR.noise_kit || []).includes(c.dataset.kit);
+  updateChannelBounds();
+}
+
+// La couche bruit plafonne la voie a INIT.max_noise_channel cote serveur ;
+// mieux vaut empecher la valeur invalide que la signaler apres coup.
+function updateChannelBounds(){
+  const max = (CUR && CUR.noise_on) ? INIT.max_noise_channel : 8;
+  for (const id of ['sndChannel', 'bankChannel']){
+    const el = $(id);
+    el.max = max;
+    if (el.value !== '' && +el.value > max) el.value = max;
+  }
 }
 
 async function post(url, body){
@@ -684,19 +697,30 @@ async function post(url, body){
 async function roll(){
   const d = await post('/api/design/random',
     {category: CAT, seed: Math.floor(Math.random()*1e6), channel: chan(), name: name_()});
+  if (d.error){ showMsgs([d.error], true); return; }
   CUR = d.params; paintParams(); paint(d); play(d.preview);
 }
 
+let renderBusy = false, renderAgain = false;
 async function render(){
-  const d = await post('/api/design/render',
-    {params: CUR, channel: chan(), name: name_(), priority: 1});
-  paint(d); play(d.preview);
+  if (renderBusy){ renderAgain = true; return; }
+  renderBusy = true;
+  try{
+    const d = await post('/api/design/render',
+      {params: CUR, channel: chan(), name: name_(), priority: 1});
+    if (d.error){ showMsgs([d.error], true); return; }
+    paint(d); play(d.preview);
+  } finally {
+    renderBusy = false;
+    if (renderAgain){ renderAgain = false; render(); }
+  }
 }
 
 async function mutate(){
   const d = await post('/api/design/mutate',
     {params: CUR, amount: +$('amount').value/100, locked: [...LOCKED],
      seed: Math.floor(Math.random()*1e6), count: 8, channel: chan()});
+  if (d.error){ showMsgs([d.error], true); return; }
   VARIANTS = d.variants;
   const box = $('variants'); box.innerHTML = ''; playing = -1;
   VARIANTS.forEach((v, i) => {
@@ -738,7 +762,7 @@ async function refreshBank(){
 $('roll').onclick = roll;
 $('mutate').onclick = mutate;
 $('amount').oninput = () => { $('vAmt').textContent = $('amount').value; };
-$('noise_on').onchange = e => { CUR.noise_on = e.target.checked; render(); };
+$('noise_on').onchange = e => { CUR.noise_on = e.target.checked; updateChannelBounds(); render(); };
 $('kit').onchange = () => {
   CUR.noise_kit = [...document.querySelectorAll('[data-kit]')]
     .filter(c => c.checked).map(c => c.dataset.kit);
@@ -756,7 +780,8 @@ $('bankChannel').onchange = $('bankName').onchange = async () => {
   await refreshBank();
 };
 document.addEventListener('keydown', e => {
-  if (mode === 'create' && e.code === 'Space' && e.target.tagName !== 'INPUT'){
+  if (mode === 'create' && e.code === 'Space' &&
+      e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA'){
     e.preventDefault(); render();
   }
 });
