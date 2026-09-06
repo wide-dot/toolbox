@@ -716,26 +716,43 @@ function buildSliders(){
   box.innerHTML = '';
   for (const [key, [lo, hi]] of Object.entries(INIT.bounds)){
     const isInt = INIT.int_params.includes(key);
+    // Deux lignes par reglage : l'etiquette et la valeur au-dessus, le curseur
+    // sur toute la largeur en dessous. Sur une seule ligne il ne restait qu'une
+    // centaine de pixels de course, insuffisant pour viser une valeur.
+    const pas = isInt ? 1 : +((hi - lo) / 200).toPrecision(2);
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:6px;align-items:center;margin:2px 0';
+    row.style.cssText = 'margin:7px 0';
     row.innerHTML =
-      `<input type="checkbox" data-lock="${key}" title="cadenas" style="width:auto">` +
-      `<label style="flex:0 0 130px;margin:0;font-size:11px">${key}</label>` +
-      `<input type="range" data-p="${key}" min="${lo}" max="${hi}" ` +
-      `step="${isInt ? 1 : (hi - lo) / 200}" style="flex:1">` +
-      `<span data-v="${key}" style="flex:0 0 52px;text-align:right;font-size:11px"></span>`;
+      `<div style="display:flex;gap:6px;align-items:center">` +
+        `<input type="checkbox" data-lock="${key}" title="cadenas" style="width:auto">` +
+        `<label style="flex:1;margin:0;font-size:11px">${key}</label>` +
+        `<input type="number" data-v="${key}" min="${lo}" max="${hi}" step="${pas}" ` +
+          `title="valeur exacte, modifiable" ` +
+          `style="flex:0 0 74px;padding:2px 5px;font-size:11px;text-align:right">` +
+      `</div>` +
+      `<input type="range" data-p="${key}" min="${lo}" max="${hi}" step="${pas}" ` +
+      `style="width:100%;margin-top:2px">`;
     box.appendChild(row);
   }
   box.oninput = e => {
-    const key = e.target.dataset.p;
+    const key = e.target.dataset.p || e.target.dataset.v;
     if (!key) return;
-    CUR[key] = +e.target.value;
-    // Peindre l'etiquette ici : paintParams() ne passe qu'au tirage et a
-    // l'adoption, donc la valeur restait figee pendant qu'on glissait.
-    const v = document.querySelector(`[data-v="${key}"]`);
-    if (v) v.textContent = (+CUR[key]).toFixed(INIT.int_params.includes(key) ? 0 : 2);
+    const [lo, hi] = INIT.bounds[key];
+    let val = +e.target.value;
+    if (e.target.value === '' || !isFinite(val)) return;  // frappe en cours
+    val = Math.max(lo, Math.min(hi, val));
+    CUR[key] = INIT.int_params.includes(key) ? Math.round(val) : val;
+    // Tenir les deux vues d'accord. paintParams() ne passe qu'au tirage et a
+    // l'adoption, donc sans ca la valeur restait figee pendant qu'on glissait.
+    const sl = document.querySelector(`[data-p="${key}"]`);
+    const nb = document.querySelector(`[data-v="${key}"]`);
+    if (sl && e.target !== sl) sl.value = CUR[key];
+    if (nb && e.target !== nb) nb.value = fmt(key, CUR[key]);
     render();
   };
+  // Une valeur tapee hors bornes serait restee affichee telle quelle, en
+  // contradiction avec ce qui a ete rendu : on la ramene a la validation.
+  box.addEventListener('blur', e => { if (e.target.dataset.v) paintParams(); }, true);
   box.onchange = e => {
     const k = e.target.dataset.lock;
     if (k) { e.target.checked ? LOCKED.add(k) : LOCKED.delete(k); }
@@ -746,13 +763,17 @@ function buildSliders(){
 // sans effet tant que la couche est eteinte, et arp_frames tant qu'aucune marche
 // n'est choisie : on les grise plutot que de laisser chercher ce qui ne bouge
 // pas.
+const fmt = (key, v) => (+v).toFixed(INIT.int_params.includes(key) ? 0 : 2);
+
 function paintEnabled(){
   const bruit = !!CUR.noise_on;
   const arp = (CUR.arp_steps || []).length > 0;
   for (const [key] of Object.entries(INIT.bounds)){
     const inerte = (key.startsWith('noise_') && !bruit) || (key === 'arp_frames' && !arp);
     const s = document.querySelector(`[data-p="${key}"]`);
+    const v = document.querySelector(`[data-v="${key}"]`);
     if (s){ s.disabled = inerte; if (s.parentElement) s.parentElement.style.opacity = inerte ? 0.4 : 1; }
+    if (v) v.disabled = inerte;
   }
 }
 
@@ -762,8 +783,7 @@ function paintParams(){
     const s = document.querySelector(`[data-p="${key}"]`);
     const v = document.querySelector(`[data-v="${key}"]`);
     if (s) s.value = CUR[key];
-    if (v) v.textContent = (+CUR[key]).toFixed(
-      INIT.int_params.includes(key) ? 0 : 2);
+    if (v) v.value = fmt(key, CUR[key]);
   }
   $('noise_on').checked = !!CUR.noise_on;
   paintEnabled();
