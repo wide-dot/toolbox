@@ -117,6 +117,21 @@
       <div class="hint">Le cadenas emp&ecirc;che la mutation de toucher un r&eacute;glage.
         C'est comme &ccedil;a qu'on converge&nbsp;: on fige ce qui est bon, on relance
         le hasard sur le reste.</div>
+      <label>Arp&egrave;ge &mdash; marches</label>
+      <select id="arp_steps">
+        <option value="">aucune (le curseur arp_frames reste sans effet)</option>
+        <option value="0,12">octave</option>
+        <option value="0,7">quinte</option>
+        <option value="0,4,7">accord majeur</option>
+        <option value="0,3,7">accord mineur</option>
+        <option value="0,4,7,12">majeur + octave</option>
+        <option value="0,3,7,10">mineur septi&egrave;me</option>
+        <option value="0,5,7,12">quarte-quinte</option>
+      </select>
+      <div class="hint">La note saute d'une marche &agrave; l'autre toutes les
+        <i>arp_frames</i> trames. C'est le geste le plus reconnaissable du son de
+        puce&nbsp;: il fait tenir un accord sur une voie qui n'en joue qu'une.
+        Sans marches, <i>arp_frames</i> ne fait rien.</div>
       <div id="sliders"></div>
     </fieldset>
 
@@ -677,7 +692,22 @@ function buildSliders(){
   };
 }
 
+// Un curseur qui ne peut rien changer doit le dire. Les reglages de bruit sont
+// sans effet tant que la couche est eteinte, et arp_frames tant qu'aucune marche
+// n'est choisie : on les grise plutot que de laisser chercher ce qui ne bouge
+// pas.
+function paintEnabled(){
+  const bruit = !!CUR.noise_on;
+  const arp = (CUR.arp_steps || []).length > 0;
+  for (const [key] of Object.entries(INIT.bounds)){
+    const inerte = (key.startsWith('noise_') && !bruit) || (key === 'arp_frames' && !arp);
+    const s = document.querySelector(`[data-p="${key}"]`);
+    if (s){ s.disabled = inerte; if (s.parentElement) s.parentElement.style.opacity = inerte ? 0.4 : 1; }
+  }
+}
+
 function paintParams(){
+  $('arp_steps').value = (CUR.arp_steps || []).join(',');
   for (const [key] of Object.entries(INIT.bounds)){
     const s = document.querySelector(`[data-p="${key}"]`);
     const v = document.querySelector(`[data-v="${key}"]`);
@@ -686,6 +716,7 @@ function paintParams(){
       INIT.int_params.includes(key) ? 0 : 2);
   }
   $('noise_on').checked = !!CUR.noise_on;
+  paintEnabled();
   for (const c of document.querySelectorAll('[data-kit]'))
     c.checked = (CUR.noise_kit || []).includes(c.dataset.kit);
   updateChannelBounds();
@@ -782,7 +813,15 @@ async function refreshBank(){
 $('roll').onclick = roll;
 $('mutate').onclick = mutate;
 $('amount').oninput = () => { $('vAmt').textContent = $('amount').value; };
-$('noise_on').onchange = e => { CUR.noise_on = e.target.checked; updateChannelBounds(); render(); };
+$('arp_steps').onchange = e => {
+  CUR.arp_steps = e.target.value ? e.target.value.split(',').map(Number) : [];
+  // Des marches sans cadence donneraient encore un arpege muet.
+  if (CUR.arp_steps.length && !CUR.arp_frames) CUR.arp_frames = 2;
+  paintParams(); render();
+};
+$('noise_on').onchange = e => {
+  CUR.noise_on = e.target.checked; updateChannelBounds(); paintEnabled(); render();
+};
 $('kit').onchange = () => {
   CUR.noise_kit = [...document.querySelectorAll('[data-kit]')]
     .filter(c => c.checked).map(c => c.dataset.kit);
