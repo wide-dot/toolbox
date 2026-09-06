@@ -331,6 +331,7 @@
     <legend>Timbres par bandes</legend>
     <div id="instBands" style="display:flex;flex-wrap:nowrap;gap:5px;
       align-items:flex-start;overflow-x:auto;padding-bottom:4px"></div>
+    <div id="instFramesHost" style="max-width:360px;margin-top:6px"></div>
     <div class="hint">Une case par bande, dans l'ordre o&ugrave; elles sont jou&eacute;es.
       Le son passe d'une bande &agrave; la suivante toutes les <i>inst_frames</i> trames,
       puis reboucle. Aucune bande&nbsp;: le son garde le timbre unique du curseur
@@ -762,6 +763,11 @@ async function initCreate(){
   }
   paintCats();
   buildSliders();
+  // inst_frames vit avec les bandes qu'il cadence, pas dans la liste de gauche :
+  // regler la duree d'une bande en regardant les bandes evite l'aller-retour
+  // entre les deux colonnes. On DEPLACE la ligne generee, on ne la duplique pas.
+  const rangee = document.querySelector('[data-p="inst_frames"]');
+  if (rangee && rangee.parentElement) $('instFramesHost').appendChild(rangee.parentElement);
   const kit = $('kit');
   for (const k of INIT.kits){
     const l = document.createElement('label');
