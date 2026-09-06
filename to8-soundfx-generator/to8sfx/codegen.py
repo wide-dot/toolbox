@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from . import opll
+from . import rhythm
 from .opll import (
     KEY_ON,
     REG_BLOCK,
@@ -70,7 +72,20 @@ def simplify(frames: list[Frame], cents: float = 0.0, vol_step: int = 1) -> list
 # --- Trames -> commandes ----------------------------------------------------
 
 
-def frames_to_commands(frames: list[Frame], custom_patch: bytes | None = None) -> list[Command]:
+def frames_to_commands(frames: list[Frame], custom_patch: bytes | None = None,
+                       noise: list[int] | None = None, channel: int = 0,
+                       noise_pitch: int = 4, noise_vol: int = 4) -> list[Command]:
+    """Trames -> flux de commandes du driver.
+
+    `noise` porte, pour chaque trame, le masque de declenchement des percussions
+    (sans le bit RHYTHM_ON, qui est ajoute ici). None quand la couche est
+    eteinte : le flux est alors rigoureusement celui d'avant.
+
+    Les registres de la section rythme recoivent le numero de voie de la part du
+    driver ; `rhythm.encode` les pre-soustrait. `commands_to_events`, qui sert au
+    preview, rejoue exactement la meme regle, donc ce qu'on entend est ce que la
+    puce recevra.
+    """
     cmds: list[Command] = []
     shadow: dict[int, int | None] = {REG_FNUM_LO: None, REG_BLOCK: None, REG_INST_VOL: None}
 
@@ -80,7 +95,17 @@ def frames_to_commands(frames: list[Frame], custom_patch: bytes | None = None) -
         cmds.append(Command(CMD_CUSTOM_PATCH, 0, 0, patch=bytes(custom_patch)))
         shadow[REG_INST_VOL] = 0x00
 
-    for f in frames:
+    noise_shadow: int | None = None
+    if noise is not None:
+        rhythm.check_channel(channel)
+        # Armer la section rythme une fois pour toutes, avant la premiere trame.
+        for reg, val in rhythm.arm_writes(noise_pitch, noise_vol):
+            cmds.append(Command(rhythm.encode(reg, channel), val, 0))
+        cmds.append(Command(rhythm.encode(opll.REG_RHYTHM, channel),
+                            rhythm.RHYTHM_ON, 0))
+        noise_shadow = rhythm.RHYTHM_ON
+
+    for i, f in enumerate(frames):
         if f.voiced:
             # Debut de note en mode melodique : le key-on doit repasser par 0
             # pour que l'enveloppe soit relancee (elle est declenchee sur front,
@@ -106,10 +131,17 @@ def frames_to_commands(frames: list[Frame], custom_patch: bytes | None = None) -
         changed = [(r, want[r]) for r in (REG_INST_VOL, REG_FNUM_LO, REG_BLOCK)
                    if r in want and shadow[r] != want[r]]
 
+        if noise is not None:
+            wanted_noise = rhythm.RHYTHM_ON | (noise[i] if i < len(noise) else 0)
+            if wanted_noise != noise_shadow:
+                changed.append((rhythm.encode(opll.REG_RHYTHM, channel), wanted_noise))
+                noise_shadow = wanted_noise
+
         if changed:
             for reg, val in changed:
                 cmds.append(Command(reg, val, 0))
-                shadow[reg] = val
+                if reg in shadow:
+                    shadow[reg] = val
             cmds[-1].delay = 1
         elif cmds:
             if cmds[-1].delay < MAX_DELAY:
@@ -126,6 +158,10 @@ def fit_to_budget(
     max_commands: int = MAX_COMMANDS,
     custom_patch: bytes | None = None,
     quantize_pitch: bool = True,
+    noise: list[int] | None = None,
+    channel: int = 0,
+    noise_pitch: int = 4,
+    noise_vol: int = 4,
 ):
     """Simplifie progressivement jusqu'a tenir dans le budget de commandes.
 
@@ -146,7 +182,8 @@ def fit_to_budget(
         ladder = [(0.0, 1), (0.0, 2), (0.0, 3), (0.0, 4), (0.0, 6), (0.0, 8)]
     for cents, vstep in ladder:
         simple = simplify(frames, cents, vstep)
-        cmds = frames_to_commands(simple, custom_patch)
+        cmds = frames_to_commands(simple, custom_patch, noise, channel,
+                                  noise_pitch, noise_vol)
         if len(cmds) <= max_commands:
             info = {"cents": cents, "vol_step": vstep, "truncated": False}
             return cmds, simple, info
@@ -154,7 +191,8 @@ def fit_to_budget(
     # Dernier recours : on tronque, en le disant.
     cents, vstep = ladder[-1]
     simple = simplify(frames, cents, vstep)
-    cmds = frames_to_commands(simple, custom_patch)[:max_commands]
+    cmds = frames_to_commands(simple, custom_patch, noise, channel,
+                              noise_pitch, noise_vol)[:max_commands]
     return cmds, simple, {"cents": cents, "vol_step": vstep, "truncated": True}
 
 
