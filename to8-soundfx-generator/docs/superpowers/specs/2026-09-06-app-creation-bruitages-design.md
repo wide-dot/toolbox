@@ -188,8 +188,8 @@ figée — deux sons sur deux voies différentes s'enchaînent correctement.
 
 Deux validations à l'export, par son :
 
-- couche bruit active → la voie doit être entre 0 et 6, sinon la
-  pré-soustraction des registres rythme retombe sous `$0F` (voir Garde-fous) ;
+- couche bruit active → la voie doit être entre 0 et 5, faute de quoi le mode
+  rythme efface la couche mélodique (voir Garde-fous) ;
 - la voie est rappelée en commentaire dans l'en-tête de chaque bloc généré,
   pour qu'une relecture du `.asm` dise tout de suite sur quoi le son joue.
 
@@ -205,10 +205,20 @@ chemin, aux côtés des deux `.asm` exportés.
 L'avertissement va dans l'interface **et** dans l'en-tête de l'ASM généré, comme
 celui de l'instrument custom.
 
-**Voies utilisables avec la couche bruit : 0 à 6.** Le générateur pré-soustrait
-la voie des registres rythme ; à partir de la voie 7, `$16 − 7 = $0F` retombe
-dans la plage écrite verbatim et viserait le mauvais registre. Le générateur
-refuse alors la couche bruit, en le disant.
+**Voies utilisables avec la couche bruit : 0 à 5.** Deux contraintes se
+superposent, et ce n'est pas la plus évidente qui lie :
+
+- *l'adressage* — le générateur pré-soustrait la voie des registres rythme ; à
+  partir de la voie 7, `$16 − 7 = $0F` retombe dans la plage écrite verbatim et
+  viserait le mauvais registre. Cette contrainte seule donnerait 6 ;
+- *le matériel* — le mode rythme réquisitionne les voies 6, 7 et 8. Une couche
+  mélodique posée sur l'une d'elles n'est pas dégradée, elle est **effacée**.
+
+Mesure sur l'émulateur, note tenue, RMS sur 250 ms, avec et sans mode rythme :
+voies 0 à 5 identiques (0,02584) ; voie 6 → 0,00000, voie 7 → 0,00011, voie 8 →
+0,00000. C'est donc **5**, et un bruitage sur la voie 6 serait sorti
+silencieusement amputé de tout son corps tonal. Le générateur refuse au-delà,
+en le disant.
 
 **Instrument custom hors périmètre pour cette version.** Il existe déjà côté
 fichier audio, avec ses avertissements ; le mêler au tirage au sort
