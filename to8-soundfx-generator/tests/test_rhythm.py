@@ -95,7 +95,7 @@ def test_encode_refuses_a_rhythm_register_on_an_out_of_range_channel():
             raise AssertionError(
                 f"encode(${reg:02X}, {channel}) n'a pas leve alors que la voie "
                 "est hors plage")
-    print("  encode refuse les registres rythmiques au-dela de la voie 6")
+    print("  encode refuse les registres rythmiques au-dela de la voie 5")
 
 
 def test_each_percussion_is_actually_noisy():

@@ -76,12 +76,48 @@ def test_noise_layer_refuses_channels_taken_by_rhythm_mode():
     print("  voies 6, 7 et 8 refusees avec la couche bruit")
 
 
-def test_no_noise_means_no_extra_command():
-    """noise=None doit laisser le flux rigoureusement identique a l'existant."""
+def test_stream_is_byte_identical_to_before_the_noise_layer():
+    """Sans couche bruit, le flux doit etre celui d'AVANT cette tache.
+
+    Reference capturee sur codegen.py au commit df1013e, qui precede
+    l'entrelacement du bruit. Comparer deux appels de la fonction actuelle ne
+    prouverait rien : avec noise=None ils traversent le meme chemin, donc leur
+    egalite est forcee quoi que fasse le code. Seule une reference exterieure,
+    figee, detecte une modification inconditionnelle du flux - et c'est de ca
+    que depend l'onglet Fichier audio, qui ne doit rien voir de cette tache.
+
+    Si ce test tombe apres un changement volontaire du format des commandes,
+    recapturer la reference en connaissance de cause, ne pas l'ajuster a
+    l'aveugle pour faire passer la suite.
+    """
+    frames = [
+        opll.Frame(True, 300, 3, 8, 5, attack=True),   # debut de note
+        opll.Frame(True, 300, 3, 8, 5, attack=False),  # tenue : rien ne change
+        opll.Frame(True, 350, 3, 8, 5, attack=False),  # changement de hauteur
+        opll.Frame(True, 350, 3, 4, 5, attack=False),  # changement de volume
+        opll.Frame(False, 350, 3, 4, 5),               # note coupee
+        opll.Frame(True, 400, 4, 10, 5, attack=True),  # nouvelle attaque
+    ]
+    expected = [
+        (48, 88, 0), (16, 44, 0), (32, 23, 2), (16, 94, 1), (48, 84, 1),
+        (32, 7, 1), (48, 90, 0), (16, 144, 0), (32, 25, 1),
+    ]
+    cmds = codegen.frames_to_commands(frames)
+    got = [(c.reg, c.data, c.delay) for c in cmds]
+    assert got == expected, f"flux modifie sans couche bruit : {got}"
+    print(f"  {len(got)} commandes, identiques au flux d'avant la couche bruit")
+
+
+def test_channel_is_ignored_without_a_noise_track():
+    """noise=None doit laisser channel sans effet : il ne doit pas fuir hors
+    de sa garde `if noise is not None`. Ce test ne prouve PAS la
+    non-regression du flux (voir test_stream_is_byte_identical_to_before_the_noise_layer
+    pour ca) : avec noise=None les deux appels traversent de toute facon le
+    meme chemin, donc leur egalite est forcee quoi que fasse le code."""
     a = codegen.frames_to_commands(_tone_frames(20))
     b = codegen.frames_to_commands(_tone_frames(20), noise=None, channel=CHANNEL)
     assert [(c.reg, c.data, c.delay) for c in a] == [(c.reg, c.data, c.delay) for c in b]
-    print(f"  {len(a)} commandes, identiques sans couche bruit")
+    print(f"  {len(a)} commandes, channel sans effet quand noise=None")
 
 
 if __name__ == "__main__":
