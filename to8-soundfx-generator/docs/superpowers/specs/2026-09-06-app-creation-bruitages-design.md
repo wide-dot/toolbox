@@ -74,7 +74,11 @@ Trois couches entrelacées dans **un seul** flux de commandes.
 | `f_start` | 40..5000 Hz | hauteur de départ |
 | `slide` | −3..+3 | demi-tons par trame |
 | `slide_delta` | −0,2..+0,2 | demi-ton par trame² — l'inflexion du glissement, ce qui donne le « pyoo » qui ralentit |
-| `pitch_curve` | `exp` \| `lin` | |
+
+La hauteur est exprimée **en demi-tons** (`midi0 + slide·t + ½·slide_delta·t²`),
+donc en échelle logarithmique. Un choix `exp`/`lin` comme en avait l'ancien mode
+paramétrique n'a plus de sens ici : `slide` en demi-tons par trame serait sans
+signification sur une interpolation linéaire en hertz. Le champ n'existe pas.
 | `vibrato_hz` / `vibrato_cents` | 0..25 / 0..1200 | |
 | `jitter_cents` | 0..1200 | substitut de bruit sur la voie mélodique |
 | `instrument` | 1..15 | timbre ROM |
