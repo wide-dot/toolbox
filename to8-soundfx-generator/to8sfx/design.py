@@ -282,8 +282,8 @@ CATEGORIES: dict[str, dict] = {
                    "decay_frames": (4, 12), "f_start": (500, 1400),
                    "slide": (0.0, 0.8), "arp_frames": (1, 3),
                    "instrument": (10, 12)},
-        "fixed": {"vol_peak": 2, "vol_end": 12,
-                  "arp_steps": (0, 4, 7, 12), "arp_retrigger": True},
+        "choices": {"arp_steps": [(0, 4, 7), (0, 4, 7, 12), (0, 7, 12), (0, 3, 7, 10)]},
+        "fixed": {"vol_peak": 2, "vol_end": 12, "arp_retrigger": True},
     },
     "saut": {
         "label": "Saut",
@@ -305,8 +305,10 @@ CATEGORIES: dict[str, dict] = {
         "label": "Menu",
         "ranges": {"attack_frames": (0, 1), "hold_frames": (1, 3),
                    "decay_frames": (2, 6), "f_start": (700, 2200),
-                   "slide": (-0.3, 0.3), "instrument": (10, 12)},
-        "fixed": {"vol_peak": 3, "vol_end": 12},
+                   "slide": (-0.3, 0.3), "instrument": (10, 12),
+                   "arp_frames": (1, 2)},
+        "choices": {"arp_steps": [(0, 7), (0, 12), (0, 4, 7), (0, 5)]},
+        "fixed": {"vol_peak": 3, "vol_end": 12, "arp_retrigger": True},
     },
     "alarme": {
         "label": "Alarme",
@@ -318,6 +320,16 @@ CATEGORIES: dict[str, dict] = {
         "fixed": {"vol_peak": 2, "vol_end": 4},
     },
 }
+
+
+def _pick(rng, options):
+    """Tire une valeur parmi des possibilites discretes.
+
+    `ranges` ne sait tirer que du numerique continu et `fixed` ne sait que
+    figer : il manquait de quoi varier un tuple. Sans ca, tous les ramassages
+    sonneraient le meme accord et le tirage n'apprendrait rien.
+    """
+    return tuple(options[int(rng.integers(0, len(options)))])
 
 
 def _draw(rng, key, lo, hi):
@@ -344,6 +356,8 @@ def randomize(category: str, seed: int) -> SfxParams:
     for key in BOUNDS:
         lo, hi = ranges.get(key, BOUNDS[key])
         setattr(p, key, _clamp(key, _draw(rng, key, lo, hi)))
+    for key, options in cat.get("choices", {}).items():
+        setattr(p, key, _pick(rng, options))
     for key, value in cat.get("fixed", {}).items():
         setattr(p, key, value)
     return p
