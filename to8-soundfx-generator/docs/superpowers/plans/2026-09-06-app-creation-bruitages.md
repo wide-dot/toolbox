@@ -874,15 +874,16 @@ def render(p: SfxParams) -> tuple[list[Frame], list[int] | None]:
 def _noise_track(p: SfxParams, n: int, rng) -> list[int] | None:
     """Rafale de frappes, dont la densite s'accelere ou retombe.
 
-    Les instants sont tires sur une courbe de puissance : un exposant inferieur
-    a 1 tasse les frappes au debut (la densite retombe : une explosion), un
-    exposant superieur a 1 les tasse a la fin (elle accelere).
+    Les instants sont tires sur une courbe de puissance u**gamma. Un exposant
+    SUPERIEUR a 1 tasse les frappes au debut, donc la densite retombe : c'est
+    une explosion. Un exposant inferieur a 1 les tasse a la fin, la densite
+    accelere. D'ou le signe moins : noise_accel negatif doit donner gamma > 1.
     """
     if not p.noise_on or p.noise_hits <= 0 or not p.noise_kit:
         return None
 
     spread = max(1, min(int(p.noise_spread_frames), n))
-    gamma = 2.0 ** (float(p.noise_accel) * 2.0)
+    gamma = 2.0 ** (-float(p.noise_accel) * 2.0)
     track = [0] * n
     kit = [k for k in p.noise_kit if k in rhythm.HITS] or ["BD"]
     for k in range(int(p.noise_hits)):
