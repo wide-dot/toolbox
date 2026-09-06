@@ -237,6 +237,13 @@ def _noise_track(p: SfxParams, n: int) -> list[int] | None:
 #
 # `ranges` remplace la borne globale de BOUNDS pendant le tirage ; `fixed` force
 # une valeur. Ce qui n'est cite ni dans l'un ni dans l'autre garde le defaut.
+#
+# AUCUNE categorie ne touche noise_on. La couche bruit bascule la puce en mode
+# rythme, ce qui requisitionne ses voies 6 a 8 : si la musique du jeu s'en sert,
+# son etat de batterie est ecrase. Une machine ne doit pas decider ca a la place
+# de l'auteur du jeu, meme pour une explosion. Les categories decrivent en
+# revanche le kit et la forme de rafale qui conviendraient, pour que la couche
+# sonne juste le jour ou l'utilisateur l'active lui-meme.
 
 CATEGORIES: dict[str, dict] = {
     "tir": {
@@ -245,7 +252,7 @@ CATEGORIES: dict[str, dict] = {
                    "decay_frames": (3, 10), "f_start": (1200, 4000),
                    "slide": (-2.5, -0.8), "slide_delta": (0.0, 0.06),
                    "instrument": (12, 15), "jitter_cents": (0, 60)},
-        "fixed": {"vol_peak": 1, "vol_end": 14, "noise_on": False},
+        "fixed": {"vol_peak": 1, "vol_end": 14},
     },
     "explosion": {
         "label": "Explosion",
@@ -255,7 +262,7 @@ CATEGORIES: dict[str, dict] = {
                    "instrument": (13, 14), "noise_hits": (10, 30),
                    "noise_spread_frames": (12, 45), "noise_accel": (-1.0, -0.4),
                    "noise_pitch": (0, 5), "noise_vol": (0, 5)},
-        "fixed": {"vol_peak": 0, "vol_end": 15, "noise_on": True,
+        "fixed": {"vol_peak": 0, "vol_end": 15,
                   "noise_kit": ("BD", "SD", "TOM")},
     },
     "impact": {
@@ -266,7 +273,7 @@ CATEGORIES: dict[str, dict] = {
                    "instrument": (13, 14), "noise_hits": (1, 4),
                    "noise_spread_frames": (1, 4), "noise_pitch": (0, 6),
                    "noise_vol": (0, 4)},
-        "fixed": {"vol_peak": 0, "vol_end": 15, "noise_on": True,
+        "fixed": {"vol_peak": 0, "vol_end": 15,
                   "noise_kit": ("BD", "TOM")},
     },
     "ramassage": {
@@ -275,7 +282,7 @@ CATEGORIES: dict[str, dict] = {
                    "decay_frames": (4, 12), "f_start": (500, 1400),
                    "slide": (0.0, 0.8), "arp_frames": (1, 3),
                    "instrument": (10, 12)},
-        "fixed": {"vol_peak": 2, "vol_end": 12, "noise_on": False,
+        "fixed": {"vol_peak": 2, "vol_end": 12,
                   "arp_steps": (0, 4, 7, 12), "arp_retrigger": True},
     },
     "saut": {
@@ -284,7 +291,7 @@ CATEGORIES: dict[str, dict] = {
                    "decay_frames": (5, 14), "f_start": (200, 600),
                    "slide": (0.6, 2.2), "slide_delta": (-0.08, 0.0),
                    "instrument": (10, 15)},
-        "fixed": {"vol_peak": 2, "vol_end": 13, "noise_on": False},
+        "fixed": {"vol_peak": 2, "vol_end": 13},
     },
     "degat": {
         "label": "Degat",
@@ -292,14 +299,14 @@ CATEGORIES: dict[str, dict] = {
                    "decay_frames": (15, 40), "f_start": (90, 300),
                    "slide": (-0.8, -0.2), "jitter_cents": (60, 250),
                    "instrument": (13, 14)},
-        "fixed": {"vol_peak": 1, "vol_end": 15, "noise_on": False},
+        "fixed": {"vol_peak": 1, "vol_end": 15},
     },
     "menu": {
         "label": "Menu",
         "ranges": {"attack_frames": (0, 1), "hold_frames": (1, 3),
                    "decay_frames": (2, 6), "f_start": (700, 2200),
                    "slide": (-0.3, 0.3), "instrument": (10, 12)},
-        "fixed": {"vol_peak": 3, "vol_end": 12, "noise_on": False},
+        "fixed": {"vol_peak": 3, "vol_end": 12},
     },
     "alarme": {
         "label": "Alarme",
@@ -308,7 +315,7 @@ CATEGORIES: dict[str, dict] = {
                    "slide": (-0.05, 0.05), "vibrato_hz": (4, 12),
                    "vibrato_cents": (300, 900), "repeat_frames": (0, 20),
                    "instrument": (5, 8)},
-        "fixed": {"vol_peak": 2, "vol_end": 4, "noise_on": False},
+        "fixed": {"vol_peak": 2, "vol_end": 4},
     },
 }
 

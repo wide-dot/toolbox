@@ -712,7 +712,13 @@ async function roll(){
   const d = await post('/api/design/random',
     {category: CAT, seed: Math.floor(Math.random()*1e6), channel: chan(), name: name_()});
   if (d.error){ showMsgs([d.error], true); return; }
-  CUR = d.params; paintParams(); paint(d); play(d.preview);
+  // La case des percussions appartient a l'utilisateur : un tirage ne doit ni
+  // l'activer ni l'eteindre. On reporte donc son choix sur le son tire, et on
+  // regenere pour que ce qu'on entend corresponde a la case.
+  const voulu = $('noise_on').checked;
+  CUR = d.params;
+  if (voulu && !CUR.noise_on){ CUR.noise_on = true; paintParams(); return render(); }
+  paintParams(); paint(d); play(d.preview);
 }
 
 let renderBusy = false, renderAgain = false;
