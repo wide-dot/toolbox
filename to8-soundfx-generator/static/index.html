@@ -751,7 +751,9 @@ function buildSliders(){
     row.innerHTML =
       `<div style="display:flex;gap:6px;align-items:center">` +
         `<input type="checkbox" data-lock="${key}" title="cadenas" style="width:auto">` +
-        `<label style="flex:1;margin:0;font-size:11px">${key}</label>` +
+        `<label style="flex:1;margin:0;font-size:11px">${key}` +
+          (key === 'instrument' ? ` <b data-name="instrument" style="color:var(--accent);font-weight:500"></b>` : '') +
+        `</label>` +
         `<input type="number" data-v="${key}" min="${lo}" max="${hi}" step="${pas}" ` +
           `title="valeur exacte, modifiable" ` +
           `style="flex:0 0 74px;padding:2px 5px;font-size:11px;text-align:right">` +
@@ -774,6 +776,7 @@ function buildSliders(){
     const nb = document.querySelector(`[data-v="${key}"]`);
     if (sl && e.target !== sl) sl.value = CUR[key];
     if (nb && e.target !== nb) nb.value = fmt(key, CUR[key]);
+    if (key === 'instrument') paintInstrumentName();
     render();
   };
   // Une valeur tapee hors bornes serait restee affichee telle quelle, en
@@ -790,6 +793,13 @@ function buildSliders(){
 // n'est choisie : on les grise plutot que de laisser chercher ce qui ne bouge
 // pas.
 const fmt = (key, v) => (+v).toFixed(INIT.int_params.includes(key) ? 0 : 2);
+
+// Les cles de INIT.instruments sont des chaines : le JSON ne sait pas garder
+// des entiers en cle de dictionnaire.
+function paintInstrumentName(){
+  const b = document.querySelector('[data-name="instrument"]');
+  if (b && INIT) b.textContent = '\u2014 ' + (INIT.instruments[String(CUR.instrument)] || '?');
+}
 
 // La duree reste derivee : on ne la stocke nulle part, on repartit la cible sur
 // les trois phases en gardant leurs proportions. Un reglage de duree autonome
@@ -838,6 +848,7 @@ function paintParams(){
     if (s) s.value = CUR[key];
     if (v) v.value = fmt(key, CUR[key]);
   }
+  paintInstrumentName();
   $('noise_on').checked = !!CUR.noise_on;
   paintEnabled();
   for (const c of document.querySelectorAll('[data-kit]'))
