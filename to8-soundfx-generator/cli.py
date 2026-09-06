@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """Ligne de commande du generateur de bruitages soundFX (Thomson TO8).
 
-    ./cli.py ui                                   interface web (preview a l'oreille)
-    ./cli.py sweep --preset explosion -o son.asm  mode parametrique
-    ./cli.py wav laser.wav --name Laser            depuis un fichier audio
-    ./cli.py import <soundFX.asm> <label>          relire un son existant
-    ./cli.py presets                               lister les presets
+    ./cli.py ui                                          interface web (l'atelier de creation)
+    ./cli.py create --category explosion --seed 42 -o son.asm  tirer un bruitage au sort
+    ./cli.py bank banque.json --out-dir build/                 generer la banque (2 fichiers .asm)
+    ./cli.py wav laser.wav --name Laser                   depuis un fichier audio
+    ./cli.py import <soundFX.asm> <label>                 relire un son existant
 """
 
 from __future__ import annotations
 
 import argparse
-import dataclasses
+import os
 import sys
 
 from to8sfx import analyze as an
-from to8sfx import codegen, importer, instruments, melody, opll, parametric
+from to8sfx import codegen, importer, instruments, melody, opll
 
 
 def _emit(args, frames, source_label, envelope=None):
@@ -77,14 +77,45 @@ def _emit(args, frames, source_label, envelope=None):
         print(f"preview : {args.wav}", file=sys.stderr)
 
 
-def cmd_sweep(args):
-    p = parametric.PRESETS.get(args.preset)
-    p = dataclasses.replace(p) if p else parametric.SweepParams()
-    for field in dataclasses.fields(parametric.SweepParams):
-        v = getattr(args, field.name, None)
-        if v is not None:
-            setattr(p, field.name, v)
-    _emit(args, parametric.sweep(p), f"mode parametrique ({args.preset or 'manuel'})")
+def cmd_create(args):
+    from to8sfx import design as dz
+    p = dz.randomize(args.category, args.seed)
+    frames, noise = dz.render(p)
+    cmds, _used, info = codegen.fit_to_budget(
+        frames, noise=noise, channel=args.channel,
+        noise_pitch=p.noise_pitch, noise_vol=p.noise_vol)
+    st = codegen.stats(cmds)
+    asm = codegen.to_asm(args.name, args.channel, cmds, priority=args.priority,
+                         source=f"{args.category}, graine {args.seed}")
+    if args.out:
+        with open(args.out, "w") as fh:
+            fh.write(asm)
+        print(f"ecrit : {args.out}")
+    else:
+        print(asm)
+    print(f"  {st['commands']} commandes / 255, {st['bytes']} octets, "
+          f"{st['seconds']:.2f} s, voie {args.channel}", file=sys.stderr)
+    if info["truncated"]:
+        print("  TRONQUE : raccourcir la chute", file=sys.stderr)
+    if args.wav:
+        ev, n = codegen.commands_to_events(cmds, args.channel)
+        importer.write_wav(args.wav, opll.render(ev, n))
+        print(f"preview : {args.wav}", file=sys.stderr)
+
+
+def cmd_bank(args):
+    from to8sfx import bank as bk
+    b = bk.Bank.from_json(open(args.source).read())
+    out = b.build()
+    os.makedirs(args.out_dir, exist_ok=True)
+    for fname, key in (("soundFX.asm", "asm"), ("soundFX.const.asm", "const")):
+        path = os.path.join(args.out_dir, fname)
+        with open(path, "w") as fh:
+            fh.write(out[key])
+        print(f"ecrit : {path}")
+    print(f"  {len(out['per_sound'])} son(s), {out['bytes']} octets")
+    for w in out["warnings"]:
+        print(f"  ! {w}", file=sys.stderr)
 
 
 def cmd_wav(args):
@@ -133,12 +164,6 @@ def cmd_import(args):
         print(f"rendu : {args.wav}")
 
 
-def cmd_presets(_args):
-    for k, p in parametric.PRESETS.items():
-        print(f"{k:14s} {p.duration_ms:5d} ms  {p.f_start:7.0f} -> {p.f_end:6.0f} Hz  "
-              f"inst {p.instrument:2d} {opll.INSTRUMENTS[p.instrument]}")
-
-
 def cmd_ui(args):
     from to8sfx.server import serve
     serve(port=args.port, open_browser=not args.no_browser)
@@ -174,14 +199,16 @@ def main():
         p.add_argument("--root", type=int, default=0,
                        help="tonique de la gamme, 0 = C .. 11 = B")
 
-    p = sub.add_parser("sweep", help="mode parametrique")
+    p = sub.add_parser("create", help="tirer un bruitage au sort")
     common(p)
-    p.add_argument("--preset", choices=list(parametric.PRESETS))
-    for f in dataclasses.fields(parametric.SweepParams):
-        t = {int: int, float: float, str: str}.get(f.type if not isinstance(f.type, str) else
-                                                   {"int": int, "float": float, "str": str}[f.type])
-        p.add_argument(f"--{f.name.replace('_','-')}", dest=f.name, type=t, default=None)
-    p.set_defaults(func=cmd_sweep)
+    p.add_argument("--category", default="tir")
+    p.add_argument("--seed", type=int, default=0)
+    p.set_defaults(func=cmd_create)
+
+    p = sub.add_parser("bank", help="generer les deux .asm depuis une banque JSON")
+    p.add_argument("source", help="fichier JSON de la banque")
+    p.add_argument("--out-dir", default=".", dest="out_dir")
+    p.set_defaults(func=cmd_bank)
 
     p = sub.add_parser("wav", help="depuis un fichier audio")
     common(p)
@@ -205,9 +232,6 @@ def main():
     p.add_argument("label", help="ex: soundFX.ExplosionSound.data")
     p.add_argument("--wav")
     p.set_defaults(func=cmd_import)
-
-    p = sub.add_parser("presets")
-    p.set_defaults(func=cmd_presets)
 
     p = sub.add_parser("ui", help="interface web locale")
     p.add_argument("--port", type=int, default=8731)

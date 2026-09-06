@@ -1,8 +1,11 @@
 # to8-soundfx-generator
 
-Génère les données `soundFX` du moteur Thomson TO8 (`engine/sound/soundFX.asm`,
-driver YM2413) à partir d'un fichier audio **ou** de paramètres de synthèse, avec
-un preview à l'oreille avant de builder le jeu.
+Atelier de création des bruitages `soundFX` du moteur Thomson TO8
+(`engine/sound/soundFX.asm`, driver YM2413) : catégories d'événements de jeu,
+tirage au sort, mutation à cadenas, trois couches de synthèse (ton, arpège,
+bruit), et une banque qui écrit d'un coup les deux fichiers assembleur
+cohérents entre eux. L'analyse d'un fichier audio existant reste disponible
+dans son propre onglet, mais ce n'est plus le point d'entrée principal.
 
 ---
 
@@ -10,24 +13,30 @@ un preview à l'oreille avant de builder le jeu.
 
 Le format cible n'est pas un sampler : c'est un **séquenceur de registres sur une
 seule voie FM**. Un bruitage est une liste d'écritures dans les registres du
-YM2413, chacune suivie d'un délai en ticks 50 Hz.
+YM2413, chacune suivie d'un délai en ticks 50 Hz. L'outil ne demande donc pas
+« quel fichier convertir » mais « quel événement doit sonner » : on choisit une
+catégorie (tir, explosion, impact, ramassage, saut, dégât, menu, alarme), on
+tire un son au sort dedans, on le mute par petites touches en verrouillant ce
+qui est déjà bon, et on le range dans une banque qui devient directement le
+`soundFX.asm` du jeu.
 
-Ce qui en découle, et qu'aucun outil ne pourra contourner :
+Ce qui découle du format, et qu'aucun outil ne pourra contourner :
 
 | Contrainte | Conséquence |
 |---|---|
 | grille de 20 ms (IRQ 50 Hz) | toute transitoire plus rapide disparaît |
 | une seule voie, monophonique | ni accord, ni couche, ni réverbération |
-| pas de générateur de bruit sur la voie mélodique | **une explosion enregistrée ne se convertit pas** |
+| la voie mélodique ne génère pas de bruit | mais la puce en fait par ailleurs : voir **Couche bruit** ci-dessous |
 | volume sur 4 bits | 16 crans de 3 dB, soit 45 dB de dynamique |
 | 15 instruments figés en ROM | le timbre s'approche, il ne se reproduit pas |
 | compteur de commandes sur 1 octet | **255 commandes maximum**, ~2,5 s |
 
-Les sons qui passent bien : lasers, jingles de bonus, power-ups, alarmes,
-sirènes, montées de moteur — tout ce qui est **tenu et balayé**.
-Pour les explosions et les impacts, utiliser le **mode paramétrique** : un
-balayage descendant avec du jitter donne un bien meilleur résultat que l'analyse
-d'un enregistrement.
+Les sons qui passent bien à l'oreille et au budget : lasers, jingles de bonus,
+power-ups, alarmes, sirènes, montées de moteur — tout ce qui est **tenu et
+balayé**. Pour les explosions et les impacts, la couche bruit (section rythme
+du YM2413, voir plus bas) donne un bien meilleur résultat que l'analyse d'un
+enregistrement, et les huit catégories la préconfigurent déjà où elle a du
+sens.
 
 ---
 
@@ -55,10 +64,39 @@ décode et la convertit en mono 44,1 kHz au chargement. Pour extraire quand mêm
 ./run.sh            # ouvre http://127.0.0.1:8731/
 ```
 
-Deux onglets — **Paramétrique** et **Fichier audio** — les courbes de hauteur et
-de volume tracées, un bouton **Rendu TO8** et un bouton **Source** pour l'A/B, et
-le bloc assembleur prêt à copier. Tout se régénère en direct quand on bouge un
-réglage.
+Deux onglets — **Créer** et **Fichier audio**.
+
+**Créer** est le point d'entrée principal :
+
+- **Catégorie.** Huit boutons (tir, explosion, impact, ramassage, saut, dégât,
+  menu, alarme), chacun avec son propre a priori de plages (enveloppe,
+  glissement, jitter, arpège, couche bruit activée ou non par défaut).
+- **Tirer au sort.** Une graine tire un jeu de paramètres dans les plages de la
+  catégorie choisie, et le rend immédiatement audible.
+- **Muter — 8 variantes.** Depuis le son courant, tire 8 variantes à une force
+  réglable (curseur en %). Un clic joue une variante, un second clic l'adopte.
+  **Le cadenas** à côté de chaque réglage empêche la mutation d'y toucher :
+  on fige ce qui est bon et on relance le hasard sur le reste — c'est la seule
+  forme d'historique de l'outil, il n'y a pas de pile de tirages rechargeable.
+- **Affiner.** Les curseurs des trois couches (enveloppe et glissement pour le
+  ton, marches pour l'arpège, activation et kit pour le bruit) en accès direct.
+- **Banque.** Nom du son, voie YM2413 (vide = voie par défaut de la banque),
+  bouton **Garder dans la banque** ; la liste en dessous affiche pour chaque
+  son gardé sa voie, son nombre de commandes, ses octets et un avertissement
+  s'il dépasse le budget ou utilise une voie interdite à la couche bruit.
+
+**Fichier audio** garde l'analyse d'un enregistrement : la forme d'onde, la
+sélection à la souris, le mode mélodique, le bouton **Générer** et la case
+*régénérer en direct*. Voir plus bas. C'est là que le bouton **Source** sert à
+comparer le rendu TO8 à l'enregistrement d'origine.
+
+Le bouton **Rendu TO8** (rejouer le dernier son généré, dans les deux onglets)
+et le bloc assembleur prêt à copier (**Copier l'assembleur**) sont communs aux
+deux modes. La barre latérale reste en revanche partagée sans être filtrée par
+onglet : rester sur les contrôles propres à **Créer** (catégorie, tirage,
+mutation, affiner, banque) évite d'aller titiller les réglages du mode fichier
+audio (instrument, mélodique, nom/voie de sortie), qui appellent le point
+d'entrée `/api/generate` et ne s'appliquent qu'en mode **Fichier audio**.
 
 **Sélection dans la source.** En mode fichier, la forme d'onde s'affiche avec deux
 poignées : glisser sur l'onde pour tracer une sélection, ou attraper un marqueur
@@ -77,13 +115,26 @@ niveau qu'ils auront dans le jeu.
 ### Ligne de commande
 
 ```sh
-./cli.py presets
-./cli.py sweep --preset explosion --name Explosion --channel 4 -o son.asm --wav preview.wav
+./cli.py create --category explosion --seed 42 --name Explosion --channel 4 -o son.asm --wav preview.wav
+./cli.py bank banque.json --out-dir objects/soundFX/          # les deux .asm de la banque
 ./cli.py wav laser.wav --name Laser --channel 4 --auto-instrument -o son.asm
 ./cli.py wav prise.wav --start-ms 1200 --end-ms 1800 --name Impact -o son.asm
 ./cli.py wav laser.wav --interleave --switch-penalty 0.5 -o son.asm
 ./cli.py import ../../.../r-type/objects/soundFX/soundFX.asm soundFX.FireSound.data --wav rtype.wav
 ```
+
+`create` tire un bruitage au sort dans une catégorie (`tir`, `explosion`,
+`impact`, `ramassage`, `saut`, `degat`, `menu`, `alarme` — voir
+`to8sfx.design.CATEGORIES`) et écrit son bloc assembleur, comme un tirage isolé
+de l'onglet Créer.
+
+`bank` prend un fichier JSON décrivant une banque — `{"name", "default_channel",
+"sounds": [{"name", "category", "channel", "priority", "params"}, ...]}`, le
+même format que produit `Bank.to_json()` — et écrit `soundFX.asm` et
+`soundFX.const.asm` dans `--out-dir`, avec table et identifiants dans le même
+ordre. C'est la seule commande qui sait produire les deux fichiers cohérents
+d'un coup ; l'interface construit la banque interactivement mais ne les écrit
+pas elle-même sur disque.
 
 `import` relit un bloc existant : c'est ce qui a servi à valider le générateur
 contre les six bruitages de r-type.
@@ -122,6 +173,43 @@ Sur battlesquadron, la musique occupe les deux puces. Mesure sur les VGM du
 projet : le SN76489 est plein, le YM2413 tourne en mode rythme (voies 6-8 =
 batterie) et le thème in-game n'utilise pas la **voie 4**. C'est le défaut de
 l'outil. Pour un autre jeu, refaire la mesure.
+
+---
+
+## Couche bruit
+
+La voie mélodique du YM2413 ne sait produire qu'un son pur (une somme
+d'harmoniques figée par l'instrument) : rien dans ses registres $10-$36 ne
+génère du bruit. Mais la puce, elle, en fait — par un autre chemin. Le registre
+$0E porte un **mode rythme** qui reconfigure les voies 6, 7 et 8 en cinq
+percussions (grosse caisse, caisse claire, charleston, cymbale, tom), et deux
+d'entre elles — caisse claire et charleston — sont bâties sur un générateur de
+bruit matériel. C'est la seule source de bruit de toute la puce, et l'outil
+s'en sert comme troisième couche de synthèse (`noise_on`, `noise_kit`,
+`noise_hits`, `noise_pitch`, `noise_vol` dans `to8sfx.design.SfxParams`,
+implémentée dans `to8sfx/rhythm.py`).
+
+Mesuré sur l'émulateur (platitude spectrale : 1 = bruit blanc, 0 = son pur) :
+
+| Source | Platitude spectrale |
+|---|---|
+| caisse claire (SD) | 0,26 |
+| charleston (HH) | 0,12 |
+| note mélodique (voie normale) | 0,00 |
+
+**Le prix : les voies 6, 7 et 8 sont réquisitionnées, pas seulement partagées.**
+Activer le mode rythme reconfigure ces trois voies pour la batterie ; une
+couche mélodique qui y était posée n'est pas dégradée, elle est **effacée**.
+Mesuré : RMS identique bit pour bit sur les voies 0 à 5, qu'on active le mode
+rythme ou non ; sur les voies 6 et 8, RMS exactement nul dès qu'il s'active,
+et quasi nul (résiduel) sur la 7. C'est pour ça que la couche bruit borne les
+voies utilisables à **0-5** (`rhythm.MAX_CHANNEL = 5`) et refuse toute banque
+qui combine `noise_on` avec une voie 6, 7 ou 8 (`bank.Bank.build` lève, voir
+`test_noise_layer_refuses_a_channel_above_six`). Et parce que le registre $0E
+est global à la puce, un bruitage qui active le mode rythme écrase l'état de
+batterie de la musique en cours pendant toute sa durée — d'où l'avertissement
+inséré automatiquement dans le bloc assembleur généré, et le fait que
+`noise_on` est **éteint par défaut**.
 
 ---
 
@@ -173,10 +261,12 @@ triples croches sort entier et une tenue à 4 dB de trémolo reste d'un bloc ; �
 1 dB ce même trémolo se découpe en 8 notes, à 2 dB les triples croches
 commencent à se perdre. `0` désactive le découpage par l'enveloppe.
 
-Quand le RMS de la source n'est pas disponible (mode paramétrique, relecture
-d'un son existant), le repli se fait sur le volume des trames, quantifié par
-crans de 3 dB ; le seuil y est alors planché à 4,5 dB, faute de quoi chaque
-cran passerait pour une attaque.
+Quand le RMS de la source n'est pas disponible, `melody.quantize` se replie sur
+le volume des trames, quantifié par crans de 3 dB ; le seuil y est alors
+planché à 4,5 dB, faute de quoi chaque cran passerait pour une attaque. Ce
+repli n'est atteint aujourd'hui que par les tests directs de `melody.py` — le
+mode mélodique de la ligne de commande et de l'interface passe toujours par
+une source audio, donc toujours avec un RMS mesuré.
 
 ```sh
 ./cli.py wav jingle.wav --melodic --name Bonus -o son.asm
@@ -229,7 +319,10 @@ niveau. L'option est donc **désactivée par défaut**, et l'interface le rappel
 
 ## Validation
 
-`python3 -m tests` (19 tests) vérifie, contre l'émulateur :
+`python3 -m tests` (60 tests, dans `tests/test_opll.py`, `test_analyze.py`,
+`test_melody.py`, `test_design.py`, `test_rhythm.py`, `test_codegen_noise.py`,
+`test_bank.py` et `test_server_design.py`) vérifie, contre l'émulateur, entre
+autres :
 
 - la formule `f = fnum × clk / 72 / 2^(19−block)` — écart max mesuré **0,02 %** ;
 - le pas de volume à **3,01 dB** par cran ;
@@ -274,6 +367,23 @@ d'un quartet sur 9 instruments. Aucun impact sur le jeu — le driver n'écrit j
 de patch sauf commande `$FF` explicite — mais la fidélité du preview dépend de
 laquelle est juste sur la vraie carte son.
 
+Côté atelier de création, les tests plus récents vérifient en plus, contre
+l'émulateur ou par construction :
+
+- que chaque catégorie tire des paramètres dans ses plages déclarées, de façon
+  déterministe à graine donnée, et que chacune tient dans le budget de 255
+  commandes même à son pire coin de plages ;
+- que `mutate` respecte les cadenas (un réglage verrouillé ne bouge jamais) et
+  reste dans les bornes globales ;
+- que la caisse claire et le charleston sont effectivement bruités (platitude
+  spectrale mesurée, voir **Couche bruit**), que la section rythme efface bel
+  et bien les voies 6 à 8 sans toucher aux voies 0 à 5, et que `bank.Bank`
+  refuse une couche bruit sur une voie hors de cette plage ;
+- qu'une banque écrite en JSON puis reconstruite (`Bank.from_json` /
+  `Bank.build`) redonne la même table, les mêmes identifiants dans le même
+  ordre, et le bon avertissement dans le bloc assembleur pour tout son dont la
+  couche bruit est active.
+
 ---
 
 ## Organisation
@@ -285,7 +395,10 @@ to8sfx/
   analyze.py      chargement audio, YIN, enveloppe, voisement -> trames 50 Hz
                   (la fenetre d'integration y vaut une demi-trame : plus longue,
                    elle enjambe les notes breves et les fait disparaitre)
-  parametric.py   balayages et presets
+  design.py       modele de son a trois couches (ton/arpege/bruit), CATEGORIES,
+                  randomize, mutate a cadenas
+  rhythm.py       couche bruit : section rythme du YM2413, MAX_CHANNEL
+  bank.py         la banque : JSON <-> soundFX.asm + soundFX.const.asm
   melody.py       decoupage en notes et en attaques, accordage, gammes, re-attaque
   instruments.py  appariement spectral, Viterbi d'entrelacement, fit du patch custom
   codegen.py      trames -> commandes (deduplication/RLE) -> assembleur

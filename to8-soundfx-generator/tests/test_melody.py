@@ -177,10 +177,11 @@ def test_glissando_is_not_collapsed():
     papillonnements en bord d'une note tenue. Si elle mange aussi les
     glissandos, tout un balayage se reduit a sa mediane.
     """
-    from to8sfx import parametric
-    frames = parametric.sweep(parametric.SweepParams(
-        duration_ms=420, f_start=440, f_end=1760, pitch_curve="exp",
-        vol_start=3, vol_end=6, instrument=12))
+    from to8sfx import design
+    frames, _ = design.render(design.SfxParams(
+        attack_frames=0, hold_frames=0, decay_frames=21,
+        f_start=440.0, slide=1.14, slide_delta=0.0,
+        vol_peak=3, vol_end=6, instrument=12))
     _, notes, _, _ = melody.quantize(frames)
     assert len(notes) >= 8, f"glissando ecrase en {len(notes)} note(s)"
     midis = [n.midi for n in notes]
