@@ -34,6 +34,13 @@
   button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:7px;
     padding:8px 12px;cursor:pointer;font:inherit}
   button:disabled{opacity:.45;cursor:default}
+  /* Boutons de la barre laterale. Sans classe ils tombaient sur le blanc par
+     defaut du navigateur, en plein milieu d'une palette sombre. */
+  button.chip{background:var(--panel);border:1px solid var(--line);color:var(--dim);
+    border-radius:6px;padding:6px 8px;font:inherit;cursor:pointer}
+  button.chip:hover{border-color:var(--accent);color:var(--ink)}
+  button.chip.on{background:var(--accent);border-color:var(--accent);color:#0d1114;font-weight:600}
+  button.wide{width:100%;border-radius:7px;font:inherit;cursor:pointer}
   .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
   .badges{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
   .badge{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 11px;font-size:11.5px}
@@ -103,12 +110,12 @@
   <div id="panCreate">
     <fieldset><legend>Cat&eacute;gorie</legend>
       <div id="cats" class="row" style="flex-wrap:wrap;gap:6px"></div>
-      <button id="roll" style="width:100%;margin-top:10px;padding:10px;font-weight:600">
+      <button id="roll" class="act wide" style="margin-top:10px;padding:10px">
         TIRER AU SORT
       </button>
       <label style="margin-top:10px">Force de la mutation <span id="vAmt">30</span> %</label>
       <input type="range" id="amount" min="5" max="100" step="5" value="30">
-      <button id="mutate" style="width:100%;padding:8px">MUTER &mdash; 8 variantes</button>
+      <button id="mutate" class="ghost wide" style="padding:8px">MUTER &mdash; 8 variantes</button>
       <div id="variants" class="row" style="flex-wrap:wrap;gap:4px;margin-top:8px"></div>
       <div class="hint">Clic = &eacute;couter, re-clic = adopter.</div>
     </fieldset>
@@ -153,7 +160,7 @@
       </div>
       <div class="hint">Vide = la voie par d&eacute;faut de la banque. L'outil ne peut pas
         deviner ce que la musique de ton jeu occupe.</div>
-      <button id="keep" style="width:100%;padding:8px;margin-top:8px">GARDER DANS LA BANQUE</button>
+      <button id="keep" class="act wide" style="padding:8px;margin-top:8px">GARDER DANS LA BANQUE</button>
       <div class="row" style="margin-top:10px">
         <div><label>Voie par d&eacute;faut</label><input type="number" id="bankChannel" min="0" max="8" value="4"></div>
         <div><label>Nom de la banque</label><input type="text" id="bankName" value="banque"></div>
@@ -640,7 +647,7 @@ async function initCreate(){
   for (const [k, label] of Object.entries(INIT.categories)){
     const b = document.createElement('button');
     b.textContent = label; b.dataset.k = k;
-    b.style.cssText = 'flex:1 0 30%;padding:6px';
+    b.className = 'chip'; b.style.cssText = 'flex:1 0 30%';
     b.onclick = () => { CAT = k; paintCats(); roll(); };
     cats.appendChild(b);
   }
@@ -776,7 +783,8 @@ async function mutate(){
   const box = $('variants'); box.innerHTML = ''; playing = -1;
   VARIANTS.forEach((v, i) => {
     const b = document.createElement('button');
-    b.textContent = (i+1) + ' ▸'; b.style.cssText = 'flex:1 0 20%;padding:6px';
+    b.textContent = (i+1) + ' ▸'; b.className = 'chip';
+    b.style.cssText = 'flex:1 0 20%';
     b.onclick = () => {
       if (playing === i){ CUR = v.params; paintParams(); render(); }
       else { playing = i; play(v.preview); }
