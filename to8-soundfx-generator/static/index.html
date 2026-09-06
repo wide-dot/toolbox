@@ -117,7 +117,7 @@
       <input type="range" id="amount" min="5" max="100" step="5" value="30">
       <button id="mutate" class="ghost wide" style="padding:8px">MUTER &mdash; 8 variantes</button>
       <div id="variants" class="row" style="flex-wrap:wrap;gap:4px;margin-top:8px"></div>
-      <div class="hint">Clic = &eacute;couter, re-clic = adopter.</div>
+      <div class="hint">Clic = &eacute;couter, double-clic = adopter. La variante &eacute;cout&eacute;e reste en surbrillance.</div>
     </fieldset>
 
     <fieldset><legend>Affiner</legend>
@@ -785,10 +785,15 @@ async function mutate(){
     const b = document.createElement('button');
     b.textContent = (i+1) + ' ▸'; b.className = 'chip';
     b.style.cssText = 'flex:1 0 20%';
+    // Clic simple pour ecouter, double-clic pour adopter. Le clic joue tout de
+    // suite plutot que d'attendre un eventuel double-clic : on enchaine les
+    // auditions par dizaines, une latence a chaque ecoute casserait la boucle.
     b.onclick = () => {
-      if (playing === i){ CUR = v.params; paintParams(); render(); }
-      else { playing = i; play(v.preview); }
+      playing = i;
+      for (const c of box.children) c.classList.toggle('on', c === b);
+      play(v.preview);
     };
+    b.ondblclick = () => { CUR = v.params; paintParams(); render(); };
     box.appendChild(b);
   });
 }
