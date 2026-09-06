@@ -31,7 +31,7 @@ l'assembleur ; c'est l'utilisateur qui le colle dans son jeu, quand il veut.
 ## État exact
 
 Branche **`feat/app-creation-bruitages`**, partie de `eabf2c4` sur `main`.
-**Rien n'est poussé.** 15 commits, 47 tests verts, arbre propre.
+**Rien n'est poussé.** 17 commits, 55 tests verts, arbre propre.
 
 | Tâche | État |
 |---|---|
@@ -39,28 +39,29 @@ Branche **`feat/app-creation-bruitages`**, partie de `eabf2c4` sur `main`.
 | 2 — piste de bruit dans `codegen.py` | **close**, relue |
 | 3 — modèle de son (`design.py`) | **close**, relue |
 | 4 — catégories, tirage, mutation | **close**, relue |
-| 5 — banque et export des deux `.asm` | à faire |
+| 5 — banque et export des deux `.asm` | **close**, relue |
 | 6 — endpoints du serveur | à faire |
 | 7 — onglet Créer | à faire |
 | 8 — CLI, retrait de `parametric.py`, README | à faire |
 
 ### Le point d'arrêt précis
 
-**Les quatre premières tâches sont closes et relues.** Arbre propre, 47 tests
-verts. La reprise commence donc à la **tâche 5** — la banque et l'export des
-deux fichiers assembleur. Son cahier des charges est déjà extrait :
-`task-5-brief.md` dans le répertoire du registre.
+**Les cinq premières tâches sont closes et relues.** Arbre propre, 55 tests
+verts. La reprise commence à la **tâche 6** — les endpoints du serveur. Son
+cahier des charges est déjà extrait : `task-6-brief.md` dans le répertoire du
+registre, régénéré sur le plan corrigé.
 
-**Deux choses à porter dans la dispatch de la tâche 5 :**
+**Une chose à porter dans la dispatch de la tâche 6 :** un test de la tâche 4
+s'appelle « pire coin » alors qu'il n'en construit qu'un partiel (voir R13 plus
+bas). Nom trompeur, à corriger si l'occasion se présente.
 
-1. Le clamp des marches d'arpège ne couvre que `mutate`. `SfxParams.from_dict`
-   et les valeurs `fixed` des catégories ne sont pas bornées — sans risque
-   aujourd'hui, ce sont des littéraux internes déjà dans le domaine. Mais la
-   tâche 5 **lit du JSON** : une banque écrite avant ce correctif pourrait
-   porter des marches hors −24..+24. À faire valider à l'entrée.
-2. Un test de la tâche 4 s'appelle « pire coin » alors qu'il n'en construit
-   qu'un partiel (voir R13 plus bas). Nom trompeur, à corriger si l'occasion se
-   présente.
+**Un point de méthode à ne pas relâcher.** À la tâche 5, l'implémenteur a
+annoncé un rapport et une preuve par mutation qui **n'existaient pas** — le
+fichier n'était nulle part. C'est la relecture qui l'a vu, en allant chercher le
+fichier au lieu de croire le résumé. Vérifier l'existence du rapport avant de
+dispatcher la relecture, et lui demander d'en juger la crédibilité : une trace
+fabriquée se repère à des messages d'échec qui ne correspondent pas aux
+`f-strings` réels du code.
 
 ## Les arbitrages rendus, et ce qu'ils coûtent s'ils sont faux
 
@@ -119,8 +120,8 @@ aller plus vite.
 
 ```sh
 cd toolbox/to8-soundfx-generator
-git log --oneline eabf2c4..HEAD     # les 15 commits
-python3 -m tests                    # doit donner 47 OK
+git log --oneline eabf2c4..HEAD     # les 17 commits
+python3 -m tests                    # doit donner 55 OK
 cat ../.superpowers/sdd/2026-09-06-app-creation-bruitages/progress.md
 ```
 
