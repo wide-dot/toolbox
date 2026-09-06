@@ -329,7 +329,7 @@
 
   <fieldset id="bandsBox" style="margin-top:10px">
     <legend>Timbres par bandes</legend>
-    <div id="instBands" style="display:flex;flex-wrap:nowrap;gap:5px;
+    <div id="instBands" style="display:flex;flex-wrap:wrap;gap:5px;
       align-items:flex-start;overflow-x:auto;padding-bottom:4px"></div>
     <div id="instFramesHost" style="max-width:360px;margin-top:6px"></div>
     <div class="hint">Une case par bande, dans l'ordre o&ugrave; elles sont jou&eacute;es.
@@ -863,12 +863,23 @@ function paintBands(){
   box.innerHTML = '';
   const steps = CUR.inst_steps || [];
 
+  // Une bande dont le debut tombe apres la fin du son n'est jamais jouee : le
+  // cycle (nb de bandes x inst_frames) peut depasser la duree. C'etait
+  // invisible — on ajoutait des bandes sans jamais les entendre.
+  const duree = dureeFrames();
+  const cadence = CUR.inst_frames || 0;
+
   steps.forEach((v, i) => {
+    const muette = cadence > 0 && i * cadence >= duree;
     const col = document.createElement('div');
     col.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:1px;'
       + 'border:1px solid var(--line);border-radius:6px;padding:4px 2px;'
       + 'background:var(--panel);flex:0 0 54px;width:54px';
-    col.title = `bande ${i + 1} — ${INIT.instruments[String(v)] || ''}`;
+    col.title = muette
+      ? `bande ${i + 1} jamais jouee : elle commencerait a la trame ${i * cadence}, `
+        + `le son n'en dure que ${duree}`
+      : `bande ${i + 1} — ${INIT.instruments[String(v)] || ''}`;
+    if (muette){ col.style.opacity = '.4'; col.style.borderStyle = 'dashed'; }
 
     const cran = (d) => {
       const b = document.createElement('button');
@@ -910,6 +921,21 @@ function paintBands(){
     col.append(cran(+1), num, cran(-1), nom, rang, x);
     box.appendChild(col);
   });
+
+  // Le compte, en clair, plutot que de laisser deviner.
+  if (steps.length && cadence > 0){
+    const info = document.createElement('div');
+    const cycle = steps.length * cadence;
+    const muettes = steps.filter((_, i) => i * cadence >= duree).length;
+    info.style.cssText = 'flex:0 0 100%;font-size:11px;margin-top:4px;color:'
+      + (muettes ? 'var(--warn)' : 'var(--dim)');
+    info.textContent = muettes
+      ? `Cycle de ${cycle} trames pour un son de ${duree} : ${muettes} bande(s) `
+        + `jamais jouee(s). Baisser inst_frames, ou allonger la duree.`
+      : `Cycle de ${cycle} trames, son de ${duree} — toutes les bandes sont jouees`
+        + (duree > cycle ? `, et le motif reboucle ${(duree / cycle).toFixed(1)} fois.` : '.');
+    box.appendChild(info);
+  }
 
   const plus = document.createElement('button');
   plus.className = 'chip';
