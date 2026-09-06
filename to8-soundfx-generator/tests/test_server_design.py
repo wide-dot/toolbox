@@ -32,6 +32,43 @@ def test_noise_layer_warns_about_the_music():
     print("  avertissement de la couche bruit present")
 
 
+def test_variants_endpoint_returns_playable_mutations():
+    """L'endpoint des variantes est la moitie de la boucle de creation : on
+    mute, on ecoute, on adopte. Sans test, une regression sur tout cet endpoint
+    passerait inapercue.
+    """
+    p = design.randomize("tir", seed=21)
+    out = server._variants({"params": p.to_dict(), "amount": 0.3,
+                            "locked": ["instrument"], "seed": 5,
+                            "count": 8, "channel": 4})
+    variants = out["variants"]
+    assert variants, "aucune variante produite"
+    assert len(variants) <= 8
+    for v in variants:
+        assert v["stats"]["commands"] > 0
+        assert v["preview"].startswith("/api/variant.wav?i=")
+        assert v["params"]["instrument"] == p.instrument, "le cadenas n'a pas tenu"
+    assert len(server.STATE["variant_wavs"]) == len(variants), (
+        "un wav de preview par variante, sinon les indices ne correspondent plus")
+    print(f"  {len(variants)} variantes, cadenas tenu, wavs alignes")
+
+
+def test_variants_skip_what_the_noise_layer_forbids():
+    """Une variante dont la voie est incompatible avec la couche bruit est
+    ecartee en silence. Ce comportement est voulu, mais il doit etre verifie :
+    une branche qui jette des choses sans rien dire est celle qu'on veut voir
+    testee.
+    """
+    p = design.randomize("explosion", seed=9)
+    p.noise_on = True
+    out = server._variants({"params": p.to_dict(), "amount": 0.3, "locked": [],
+                            "seed": 1, "count": 4, "channel": 8})  # voie interdite
+    assert out["variants"] == [], (
+        "des variantes sont passees alors que la voie 8 est incompatible avec "
+        "le mode rythme")
+    print("  variantes ecartees sur une voie interdite")
+
+
 def test_bank_endpoints_keep_state():
     server.STATE["bank"] = bank.Bank(default_channel=4)
     p = design.randomize("tir", seed=2)

@@ -337,9 +337,13 @@ def _variants(params: dict) -> dict:
 
 
 def _bank() -> "bank_mod.Bank":
-    if STATE.get("bank") is None:
-        STATE["bank"] = bank_mod.Bank()
-    return STATE["bank"]
+    # verrou requis : sans lui, deux requetes simultanees sur un STATE["bank"]
+    # encore vide peuvent chacune le trouver a None et creer deux banques,
+    # la seconde ecrasant silencieusement la premiere.
+    with LOCK:
+        if STATE.get("bank") is None:
+            STATE["bank"] = bank_mod.Bank()
+        return STATE["bank"]
 
 
 def _bank_view() -> dict:
@@ -361,30 +365,33 @@ def _bank_view() -> dict:
 
 def _bank_add(params: dict) -> dict:
     b = _bank()
-    b.sounds.append(bank_mod.BankSound(
-        name=params.get("name") or f"Son{len(b.sounds)}",
-        params=design.SfxParams.from_dict(params.get("params") or {}),
-        category=params.get("category", ""),
-        channel=params.get("channel"),
-        priority=int(params.get("priority", 1)),
-    ))
+    with LOCK:
+        b.sounds.append(bank_mod.BankSound(
+            name=params.get("name") or f"Son{len(b.sounds)}",
+            params=design.SfxParams.from_dict(params.get("params") or {}),
+            category=params.get("category", ""),
+            channel=params.get("channel"),
+            priority=int(params.get("priority", 1)),
+        ))
     return _bank_view()
 
 
 def _bank_remove(params: dict) -> dict:
     b = _bank()
     i = int(params.get("index", -1))
-    if 0 <= i < len(b.sounds):
-        b.sounds.pop(i)
+    with LOCK:
+        if 0 <= i < len(b.sounds):
+            b.sounds.pop(i)
     return _bank_view()
 
 
 def _bank_settings(params: dict) -> dict:
     b = _bank()
-    if params.get("name"):
-        b.name = str(params["name"])
-    if params.get("default_channel") is not None:
-        b.default_channel = int(params["default_channel"])
+    with LOCK:
+        if params.get("name"):
+            b.name = str(params["name"])
+        if params.get("default_channel") is not None:
+            b.default_channel = int(params["default_channel"])
     return _bank_view()
 
 

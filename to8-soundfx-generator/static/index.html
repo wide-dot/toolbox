@@ -265,8 +265,14 @@ const TICK = 0.02;              // une trame du driver : la vraie resolution
 const snap = t => Math.round(t / TICK) * TICK;
 
 // ---------- init ----------
+// d.presets a disparu du cote serveur (mode parametrique remplace par l'onglet
+// Creer) : PRESETS reste donc {} ici. La boucle juste en dessous ne produit
+// alors aucune option, et applyPreset() est deja garde par `if(!p) return;` -
+// le reste de l'init (instruments, gammes, notes) doit continuer de tourner
+// meme sans presets, sinon l'onglet Fichier audio se retrouve prive de son
+// selecteur d'instrument.
 fetch('/api/presets').then(r=>r.json()).then(d=>{
-  PRESETS = d.presets; INSTS = d.instruments;
+  PRESETS = d.presets || {}; INSTS = d.instruments;
   const p = $('preset');
   Object.keys(PRESETS).forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; p.appendChild(o); });
   p.value = 'explosion';
@@ -283,7 +289,7 @@ fetch('/api/presets').then(r=>r.json()).then(d=>{
     $('melodic_root').appendChild(o); });
   applyPreset('explosion');
   generate();
-});
+}).catch(e=>console.error('init /api/presets a echoue :', e));
 
 function applyPreset(k){
   const p = PRESETS[k]; if(!p) return;
