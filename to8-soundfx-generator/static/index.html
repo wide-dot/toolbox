@@ -140,6 +140,15 @@
       <div class="hint">Le cadenas emp&ecirc;che la mutation de toucher un r&eacute;glage.
         C'est comme &ccedil;a qu'on converge&nbsp;: on fige ce qui est bon, on relance
         le hasard sur le reste.</div>
+      <label>Dur&eacute;e totale <span id="vDur">0</span> ms
+        (<span id="vDurF">0</span> trames)</label>
+      <input type="range" id="duration" min="20" max="2540" step="20" value="300">
+      <div class="hint">La dur&eacute;e n'est pas un r&eacute;glage &agrave; part&nbsp;: elle vaut
+        <i>attack + hold + decay</i>. Ce curseur &eacute;tire les trois en gardant leurs
+        proportions, pour ne jamais la mettre en contradiction avec l'enveloppe
+        qui la compose. Le driver avance par trames de 20 ms, et le budget de
+        255 commandes plafonne &agrave; 2540 ms.</div>
+
       <label>Arp&egrave;ge &mdash; marches</label>
       <select id="arp_steps">
         <option value="">aucune (le curseur arp_frames reste sans effet)</option>
@@ -765,6 +774,29 @@ function buildSliders(){
 // pas.
 const fmt = (key, v) => (+v).toFixed(INIT.int_params.includes(key) ? 0 : 2);
 
+// La duree reste derivee : on ne la stocke nulle part, on repartit la cible sur
+// les trois phases en gardant leurs proportions. Un reglage de duree autonome
+// aurait pu contredire l'enveloppe qui la compose.
+function setDuration(trames){
+  const cible = Math.max(1, Math.min(127, Math.round(trames)));
+  const tot = CUR.attack_frames + CUR.hold_frames + CUR.decay_frames;
+  let a, h, d;
+  if (tot <= 0){ a = 0; h = 0; d = cible; }
+  else {
+    const k = cible / tot;
+    a = Math.max(0, Math.min(15, Math.round(CUR.attack_frames * k)));
+    h = Math.max(0, Math.min(40, Math.round(CUR.hold_frames * k)));
+    d = cible - a - h;
+    // La chute encaisse l'arrondi ; si elle sature, le reste remonte vers la
+    // tenue puis vers l'attaque, dans cet ordre.
+    if (d > 90){ h = Math.min(40, h + (d - 90)); d = 90; a = Math.max(0, Math.min(15, cible - h - d)); }
+    if (d < 1){ d = 1; h = Math.max(0, Math.min(40, cible - a - d)); a = Math.max(0, cible - h - d); }
+  }
+  CUR.attack_frames = a; CUR.hold_frames = h; CUR.decay_frames = d;
+}
+
+const dureeFrames = () => CUR.attack_frames + CUR.hold_frames + CUR.decay_frames;
+
 function paintEnabled(){
   const bruit = !!CUR.noise_on;
   const arp = (CUR.arp_steps || []).length > 0;
@@ -778,6 +810,10 @@ function paintEnabled(){
 }
 
 function paintParams(){
+  const nf = dureeFrames();
+  $('duration').value = Math.min(2540, nf * 20);
+  $('vDur').textContent = nf * 20;
+  $('vDurF').textContent = nf;
   $('arp_steps').value = (CUR.arp_steps || []).join(',');
   for (const [key] of Object.entries(INIT.bounds)){
     const s = document.querySelector(`[data-p="${key}"]`);
@@ -889,6 +925,7 @@ async function refreshBank(){
 $('roll').onclick = roll;
 $('mutate').onclick = mutate;
 $('amount').oninput = () => { $('vAmt').textContent = $('amount').value; };
+$('duration').oninput = e => { setDuration(+e.target.value / 20); paintParams(); render(); };
 $('arp_steps').onchange = e => {
   CUR.arp_steps = e.target.value ? e.target.value.split(',').map(Number) : [];
   // Des marches sans cadence donneraient encore un arpege muet.
