@@ -4,7 +4,7 @@ import sys
 
 failures = 0
 for mod in ("tests.test_opll", "tests.test_analyze", "tests.test_rhythm",
-            "tests.test_melody"):
+            "tests.test_codegen_noise", "tests.test_melody"):
     print(f"--- {mod} ---")
     m = importlib.import_module(mod)
     for name in sorted(dir(m)):
