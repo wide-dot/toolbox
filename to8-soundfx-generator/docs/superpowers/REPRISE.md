@@ -31,14 +31,14 @@ l'assembleur ; c'est l'utilisateur qui le colle dans son jeu, quand il veut.
 ## État exact
 
 Branche **`feat/app-creation-bruitages`**, partie de `eabf2c4` sur `main`.
-**Rien n'est poussé.** 13 commits, 47 tests verts, arbre propre.
+**Rien n'est poussé.** 15 commits, 47 tests verts, arbre propre.
 
 | Tâche | État |
 |---|---|
 | 1 — section rythme et adressage (`rhythm.py`) | **close**, relue |
 | 2 — piste de bruit dans `codegen.py` | **close**, relue |
 | 3 — modèle de son (`design.py`) | **close**, relue |
-| 4 — catégories, tirage, mutation | corrigée et commitée, **re-relecture non faite** |
+| 4 — catégories, tirage, mutation | **close**, relue |
 | 5 — banque et export des deux `.asm` | à faire |
 | 6 — endpoints du serveur | à faire |
 | 7 — onglet Créer | à faire |
@@ -46,36 +46,21 @@ Branche **`feat/app-creation-bruitages`**, partie de `eabf2c4` sur `main`.
 
 ### Le point d'arrêt précis
 
-La tâche 4 est **implémentée, relue, et sa ronde de correction est commitée**
-(`763d654`). Arbre propre, 47 tests verts.
+**Les quatre premières tâches sont closes et relues.** Arbre propre, 47 tests
+verts. La reprise commence donc à la **tâche 5** — la banque et l'export des
+deux fichiers assembleur. Son cahier des charges est déjà extrait :
+`task-5-brief.md` dans le répertoire du registre.
 
-**Ce qui manque, et c'est la première chose à faire en reprenant : la
-re-relecture ciblée de cette ronde.** Le dispositif l'exige — une ronde de
-correction n'est close qu'après vérification que chaque constat est traité et
-qu'aucune casse n'a été introduite. Elle porte sur le diff `2ed3342..763d654`.
+**Deux choses à porter dans la dispatch de la tâche 5 :**
 
-Les cinq constats corrigés, à vérifier :
-
-1. `ARP_STEP_MIN, ARP_STEP_MAX = -24, 24` déclarés à côté de `BOUNDS`, et clamp
-   dans `mutate` — `arp_steps` n'était borné nulle part.
-2. `test_arp_steps_are_locked_and_bounded` — l'ancien test des cadenas mutait
-   `"explosion"`, dont `arp_steps` vaut `()`, donc la branche n'était jamais
-   exercée. Le nouveau utilise `"ramassage"` et enchaîne 200 mutations.
-   Falsifiabilité prouvée : clamp retiré, échec `marche -25 hors domaine apres
-   86 mutations`.
-3. `test_randomize_stays_inside_the_category_ranges` — rien ne vérifiait les
-   plages *propres* à une catégorie.
-4. `test_mutate_is_deterministic` — seul `randomize` l'était.
-5. `test_every_category_fits_the_budget_at_its_worst_corner` — le test
-   statistique est conservé, doublé d'un test de coin construit.
-
-**Une réserve honnête de l'implémenteur, à trancher.** Le pire coin construit
-donne 106 commandes pour `explosion`, *moins* que le pic de 176 observé par
-l'échantillonnage : le coin ne force que cinq paramètres (durée, frappes,
-étalement, arpège) et laisse les autres — `jitter_cents` notamment — au tirage
-de la graine 0. Les deux tests sont donc **complémentaires**, aucun n'est
-strictement plus sévère que l'autre. Mon arbitrage R13 supposait le contraire ;
-il est à corriger. Aucune plage n'a eu besoin d'être resserrée.
+1. Le clamp des marches d'arpège ne couvre que `mutate`. `SfxParams.from_dict`
+   et les valeurs `fixed` des catégories ne sont pas bornées — sans risque
+   aujourd'hui, ce sont des littéraux internes déjà dans le domaine. Mais la
+   tâche 5 **lit du JSON** : une banque écrite avant ce correctif pourrait
+   porter des marches hors −24..+24. À faire valider à l'entrée.
+2. Un test de la tâche 4 s'appelle « pire coin » alors qu'il n'en construit
+   qu'un partiel (voir R13 plus bas). Nom trompeur, à corriger si l'occasion se
+   présente.
 
 ## Les arbitrages rendus, et ce qu'ils coûtent s'ils sont faux
 
@@ -103,7 +88,13 @@ en demi-tons : `slide` en demi-tons par trame n'aurait aucun sens sur une
 interpolation linéaire en hertz. *Si c'est faux :* il faudra le réintroduire, ce
 qui suppose de reprendre aussi le sens de `slide`.
 
-**R12/R13 — les corrections de la tâche 4**, décrites ci-dessus.
+**R13 — était faux, et c'est corrigé ici.** J'avais posé que le test du « pire
+coin » construit serait plus sévère que l'échantillonnage aléatoire. Mesuré :
+106 commandes pour le coin contre 176 pour le pic tiré au sort sur `explosion`,
+parce que le coin ne force que cinq paramètres et laisse `jitter_cents`,
+`f_start`, `slide` et `noise_accel` à la graine. **Les deux tests sont
+complémentaires, aucun ne domine l'autre**, et l'échantillonnage reste la seule
+mesure qui approche le pire cas réel.
 
 Les autres (R1 à R5, R7, R8) sont des corrections de tests creux et de code mort,
 sans effet sur le comportement. Détail dans le registre.
@@ -128,7 +119,7 @@ aller plus vite.
 
 ```sh
 cd toolbox/to8-soundfx-generator
-git log --oneline eabf2c4..HEAD     # les 13 commits
+git log --oneline eabf2c4..HEAD     # les 15 commits
 python3 -m tests                    # doit donner 47 OK
 cat ../.superpowers/sdd/2026-09-06-app-creation-bruitages/progress.md
 ```
