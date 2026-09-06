@@ -16,7 +16,7 @@
 - **Tout le code, les commentaires et les messages sont en français**, sans accents dans les fichiers `.py` (le reste du dépôt suit cette règle). Le Markdown et le HTML, eux, sont accentués.
 - **Commentaires : expliquer le pourquoi, pas le quoi.** Le dépôt documente les pièges matériels dans le code même ; suivre ce ton.
 - **Budget dur : 255 commandes par bruitage**, compteur sur un octet. `codegen.MAX_COMMANDS`.
-- **Voie YM2413 : réglage par son**, valeur par défaut au niveau de la banque. Avec la couche bruit, voies 0 à 6 seulement.
+- **Voie YM2413 : réglage par son**, valeur par défaut au niveau de la banque. Avec la couche bruit, voies 0 à 5 seulement : le mode rythme réquisitionne les voies 6 à 8 et efface toute couche mélodique posée dessus (mesuré sur l'émulateur).
 - **La couche bruit est désactivée par défaut** et porte son avertissement dans l'interface et dans l'en-tête de l'ASM généré.
 - **Ne pas toucher** `analyze.py`, `melody.py`, `instruments.py`, `importer.py`, `opll.py`, ni l'onglet Fichier audio.
 - **Tests** : fonctions `test_*` avec de simples `assert`, lancées par `python3 -m tests`. Chaque nouveau fichier de test est ajouté à la liste de `tests/__main__.py`.
@@ -51,7 +51,7 @@
   - `rhythm.HITS: dict[str, int]` — masques de déclenchement par nom
   - `rhythm.KIT_ORDER: tuple[str, ...]`
   - `rhythm.RHYTHM_ON: int` = `0x20`
-  - `rhythm.MAX_CHANNEL: int` = `6`
+  - `rhythm.MAX_CHANNEL: int` = `5`
   - `rhythm.encode(reg: int, channel: int) -> int`
   - `rhythm.arm_writes(noise_pitch: int, noise_vol: int) -> list[tuple[int, int]]` — couples (registre **absolu**, valeur)
   - `rhythm.check_channel(channel: int) -> None` — lève `ValueError`
@@ -112,7 +112,7 @@ def test_channels_above_six_are_refused():
         raise AssertionError(f"voie {channel} acceptee alors qu'elle est hors plage")
     for channel in range(0, 7):
         rhythm.check_channel(channel)  # ne doit pas lever
-    print("  voies 7 et 8 refusees, 0 a 6 acceptees")
+    print("  voies 6 a 8 refusees, 0 a 5 acceptees")
 
 
 def test_each_percussion_is_actually_noisy():
@@ -1862,7 +1862,7 @@ Repérer le conteneur du mode paramétrique (celui masqué/affiché par `tabPara
     <div class="hint"><b>Attention</b>&nbsp;: le registre $0E requisitionne les voies
       6, 7 et 8 de la puce. Si la musique du jeu s'en sert &mdash; c'est le cas de
       battlesquadron &mdash; son &eacute;tat de batterie sera &eacute;cras&eacute; pendant le
-      bruitage. Voies utilisables&nbsp;: 0 &agrave; 6.</div>
+      bruitage. Voies utilisables&nbsp;: 0 &agrave; 5.</div>
     <div id="kit" class="row" style="flex-wrap:wrap;gap:6px"></div>
   </fieldset>
 
@@ -2193,7 +2193,7 @@ Expected: `aucune reference restante`, et toute la suite `OK`.
 
 - [ ] **Step 6 : mettre le README à jour**
 
-Remplacer la section « Utilisation → Interface » et la section « Ce que c'est » pour dire que l'outil est d'abord un **atelier de création** : catégories, tirage au sort, mutation à cadenas, trois couches, banque. Ajouter une section **Couche bruit** portant la mesure de platitude spectrale (caisse claire 0,27, charleston 0,12, note mélodique 0,00), l'avertissement sur les voies 6-8 et la limite des voies 0 à 6. Corriger la ligne du tableau des contraintes qui affirme aujourd'hui « pas de générateur de bruit sur la voie mélodique → une explosion enregistrée ne se convertit pas » : la première moitié reste vraie, la conclusion ne l'est plus puisque la section rythme existe. Mettre à jour le compte de tests et l'arborescence du dossier.
+Remplacer la section « Utilisation → Interface » et la section « Ce que c'est » pour dire que l'outil est d'abord un **atelier de création** : catégories, tirage au sort, mutation à cadenas, trois couches, banque. Ajouter une section **Couche bruit** portant la mesure de platitude spectrale (caisse claire 0,27, charleston 0,12, note mélodique 0,00), l'avertissement sur les voies 6-8 et la limite des voies 0 à 5, avec la mesure qui la justifie (une note mélodique sur la voie 6 tombe à un RMS nul dès que le mode rythme s'active). Corriger la ligne du tableau des contraintes qui affirme aujourd'hui « pas de générateur de bruit sur la voie mélodique → une explosion enregistrée ne se convertit pas » : la première moitié reste vraie, la conclusion ne l'est plus puisque la section rythme existe. Mettre à jour le compte de tests et l'arborescence du dossier.
 
 - [ ] **Step 7 : commit**
 
