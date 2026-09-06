@@ -921,10 +921,27 @@ async function refreshBank(){
   const b = await (await fetch('/api/bank')).json();
   const el = $('bankList');
   el.innerHTML = b.sounds.length ? '' : '<i>banque vide</i>';
-  b.build.per_sound.forEach(s => {
+  // Chaque ligne porte son bouton de retrait : sans lui, un son ajoute par
+  // erreur restait dans la banque pour toujours, et un nom en double la rendait
+  // durablement invalide.
+  const lignes = b.build.per_sound.length ? b.build.per_sound
+    : b.sounds.map((s, i) => ({index: i, name: s.name, channel: s.channel,
+                               commands: '?', bytes: '?', truncated: false}));
+  lignes.forEach(s => {
     const d = document.createElement('div');
-    d.textContent = `${s.index} ${s.name} — voie ${s.channel}, ${s.commands} cmd, ${s.bytes} o`
+    d.style.cssText = 'display:flex;gap:6px;align-items:center';
+    const t = document.createElement('span');
+    t.style.flex = '1';
+    t.textContent = `${s.index} ${s.name} — voie ${s.channel}, ${s.commands} cmd, ${s.bytes} o`
       + (s.truncated ? '  ⚠ TRONQUE' : '');
+    const x = document.createElement('button');
+    x.className = 'ghost'; x.textContent = '×'; x.title = 'retirer de la banque';
+    x.style.cssText = 'padding:0 7px;line-height:1.4';
+    x.onclick = async () => {
+      await post('/api/bank/remove', {index: s.index});
+      await refreshBank();
+    };
+    d.appendChild(t); d.appendChild(x);
     el.appendChild(d);
   });
   if (b.sounds.length){
@@ -963,9 +980,10 @@ $('kit').onchange = () => {
   render();
 };
 $('keep').onclick = async () => {
-  await post('/api/bank/add', {name: name_(), category: CAT, params: CUR,
+  const d = await post('/api/bank/add', {name: name_(), category: CAT, params: CUR,
                                channel: $('sndChannel').value === '' ? null : chan(),
                                priority: 1});
+  if (d.error){ showMsgs([d.error], true); return; }
   await refreshBank();
 };
 $('bankChannel').onchange = $('bankName').onchange = async () => {

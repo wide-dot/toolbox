@@ -368,6 +368,15 @@ def _bank_view() -> dict:
 
 def _bank_add(params: dict) -> dict:
     b = _bank()
+    nom = params.get("name") or ""
+    # Refuser ici, pas seulement a l'export : un doublon accepte rendait toute
+    # la banque invalide, l'avertissement revenait a chaque affichage, et rien
+    # dans la page ne permettait de retirer le son fautif.
+    if any(s.name == nom for s in b.sounds):
+        raise ValueError(
+            f"un son nomme {nom} est deja dans la banque. Les noms deviennent "
+            "des etiquettes assembleur : deux `equ` porteraient le meme nom "
+            "pour deux identifiants differents. Renommer avant de garder.")
     with LOCK:
         b.sounds.append(bank_mod.BankSound(
             name=params.get("name") or f"Son{len(b.sounds)}",
