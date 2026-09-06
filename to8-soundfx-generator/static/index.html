@@ -113,9 +113,14 @@
       <button id="roll" class="act wide" style="margin-top:10px;padding:10px">
         TIRER AU SORT
       </button>
-      <label style="margin-top:10px">Force de la mutation <span id="vAmt">30</span> %</label>
+      <label style="margin-top:10px">&Eacute;cart des variantes <span id="vAmt">30</span> %</label>
       <input type="range" id="amount" min="5" max="100" step="5" value="30">
       <button id="mutate" class="ghost wide" style="padding:8px">MUTER &mdash; 8 variantes</button>
+      <div class="hint">De combien les huit variantes s'&eacute;cartent du son courant.
+        Chaque r&eacute;glage non verrouill&eacute; est secou&eacute; proportionnellement &agrave; sa propre
+        plage. <b>Faible</b>&nbsp;: des cousines, pour peaufiner.
+        <b>&Eacute;lev&eacute;</b>&nbsp;: presque un nouveau tirage. On descend au fur et &agrave;
+        mesure &mdash; fort pour chercher, faible pour ajuster.</div>
       <div id="variants" class="row" style="flex-wrap:wrap;gap:4px;margin-top:8px"></div>
       <div class="hint">Clic = &eacute;couter, double-clic = adopter. La variante &eacute;cout&eacute;e reste en surbrillance.</div>
     </fieldset>
