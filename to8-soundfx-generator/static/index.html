@@ -175,6 +175,14 @@
         <i>arp_frames</i> trames. C'est le geste le plus reconnaissable du son de
         puce&nbsp;: il fait tenir un accord sur une voie qui n'en joue qu'une.
         Sans marches, <i>arp_frames</i> ne fait rien.</div>
+      <label>Timbres par bandes</label>
+      <div id="instBands" class="row" style="flex-wrap:wrap;gap:4px"></div>
+      <div class="hint">Le son passe d'un timbre au suivant toutes les
+        <i>inst_frames</i> trames, puis reboucle. Aucun s&eacute;lectionn&eacute;&nbsp;: le son
+        garde le timbre unique du curseur <i>instrument</i>. Presque gratuit en
+        octets &mdash; le registre $30 porte l'instrument et le volume ensemble,
+        donc le changement se greffe sur une &eacute;criture d&eacute;j&agrave; n&eacute;cessaire.</div>
+
       <div id="sliders"></div>
     </fieldset>
 
@@ -748,6 +756,25 @@ async function initCreate(){
   }
   paintCats();
   buildSliders();
+  // Les 15 timbres ROM, a cocher dans l'ordre ou on veut les entendre. L'ordre
+  // est celui des numeros : previsible, et suffisant pour des bandes.
+  const bandes = $('instBands');
+  for (let n = 1; n <= 15; n++){
+    const b = document.createElement('button');
+    b.className = 'chip'; b.dataset.inst = n;
+    b.textContent = n; b.title = INIT.instruments[String(n)] || '';
+    b.style.cssText = 'flex:0 0 auto;padding:3px 7px;font-size:11px';
+    b.onclick = () => {
+      const cur = new Set(CUR.inst_steps || []);
+      cur.has(n) ? cur.delete(n) : cur.add(n);
+      CUR.inst_steps = [...cur].sort((x, y) => x - y);
+      // Des timbres sans cadence ne changeraient jamais de bande.
+      if (CUR.inst_steps.length && !CUR.inst_frames) CUR.inst_frames = 4;
+      paintParams(); render();
+    };
+    bandes.appendChild(b);
+  }
+
   const kit = $('kit');
   for (const k of INIT.kits){
     const l = document.createElement('label');
@@ -854,7 +881,11 @@ function paintEnabled(){
   const bruit = !!CUR.noise_on;
   const arp = (CUR.arp_steps || []).length > 0;
   for (const [key] of Object.entries(INIT.bounds)){
-    const inerte = (key.startsWith('noise_') && !bruit) || (key === 'arp_frames' && !arp);
+    const bandes = (CUR.inst_steps || []).length > 0;
+    const inerte = (key.startsWith('noise_') && !bruit)
+      || (key === 'arp_frames' && !arp)
+      || (key === 'inst_frames' && !bandes)
+      || (key === 'instrument' && bandes);
     const s = document.querySelector(`[data-p="${key}"]`);
     const v = document.querySelector(`[data-v="${key}"]`);
     if (s){ s.disabled = inerte; if (s.parentElement) s.parentElement.style.opacity = inerte ? 0.4 : 1; }
@@ -875,6 +906,8 @@ function paintParams(){
     if (v) v.value = fmt(key, CUR[key]);
   }
   paintInstrumentName();
+  for (const b of document.querySelectorAll('[data-inst]'))
+    b.classList.toggle('on', (CUR.inst_steps || []).includes(+b.dataset.inst));
   $('noise_on').checked = !!CUR.noise_on;
   paintEnabled();
   for (const c of document.querySelectorAll('[data-kit]'))

@@ -59,6 +59,10 @@ class SfxParams:
 
     # --- timbre ---
     instrument: int = 15
+    # Timbres qui se succedent par bandes, sur le meme principe que l'arpege.
+    # Vide ou inst_frames a 0 : le son garde `instrument` d'un bout a l'autre.
+    inst_steps: tuple[int, ...] = ()
+    inst_frames: int = 0
 
     # --- repetition ---
     repeat_frames: int = 0     # 0 = pas de repetition
@@ -83,6 +87,7 @@ class SfxParams:
         d = asdict(self)
         d["arp_steps"] = list(self.arp_steps)
         d["noise_kit"] = list(self.noise_kit)
+        d["inst_steps"] = list(self.inst_steps)
         return d
 
     @staticmethod
@@ -93,6 +98,8 @@ class SfxParams:
             out["arp_steps"] = tuple(int(v) for v in out["arp_steps"])
         if "noise_kit" in out:
             out["noise_kit"] = tuple(str(v) for v in out["noise_kit"])
+        if "inst_steps" in out:
+            out["inst_steps"] = tuple(int(v) for v in out["inst_steps"])
         return SfxParams(**out)
 
 
@@ -111,6 +118,7 @@ BOUNDS: dict[str, tuple[float, float]] = {
     "vibrato_cents": (0.0, 1200.0),
     "jitter_cents": (0.0, 1200.0),
     "arp_frames": (0, 8),
+    "inst_frames": (0, 40),
     "instrument": (1, 15),
     "repeat_frames": (0, 60),
     "noise_hits": (0, 40),
@@ -120,7 +128,7 @@ BOUNDS: dict[str, tuple[float, float]] = {
     "noise_vol": (0, 15),
 }
 INT_PARAMS = {"attack_frames", "hold_frames", "decay_frames", "vol_peak",
-              "vol_end", "arp_frames", "instrument", "repeat_frames",
+              "vol_end", "arp_frames", "inst_frames", "instrument", "repeat_frames",
               "noise_hits", "noise_spread_frames", "noise_pitch", "noise_vol"}
 
 # arp_steps n'est pas dans BOUNDS : c'est un tuple, pas un scalaire. Son
@@ -193,12 +201,21 @@ def render(p: SfxParams) -> tuple[list[Frame], list[int] | None]:
 
     vol = _envelope(p, n)
 
+    # Le timbre peut changer par bandes. Le registre $30 porte a la fois
+    # l'instrument et le volume, donc un changement se greffe le plus souvent
+    # sur une ecriture deja necessaire : c'est presque gratuit en commandes.
+    if p.inst_frames > 0 and p.inst_steps:
+        bande = (local // p.inst_frames) % len(p.inst_steps)
+        timbres = [int(p.inst_steps[k]) for k in bande]
+    else:
+        timbres = [int(p.instrument)] * n
+
     frames: list[Frame] = []
     for i in range(n):
         f = float(np.clip(freq[i], 20.0, 8000.0))
         fnum, block = freq_to_fnum_block(f)
         frames.append(Frame(True, fnum, block, int(vol[i]),
-                            int(p.instrument), bool(attack_flags[i])))
+                            timbres[i], bool(attack_flags[i])))
 
     return frames, _noise_track(p, n)
 
@@ -382,6 +399,10 @@ def mutate(p: SfxParams, amount: float, locked, seed: int) -> SfxParams:
         value = getattr(p, key) + rng.normal(0.0, span / 3.0)
         setattr(out, key, _clamp(key, value))
 
+    if "inst_steps" not in locked and p.inst_steps and rng.random() < amount:
+        lo, hi = BOUNDS["instrument"]
+        out.inst_steps = tuple(
+            int(max(lo, min(hi, t + rng.integers(-2, 3)))) for t in p.inst_steps)
     if "arp_steps" not in locked and p.arp_steps and rng.random() < amount:
         out.arp_steps = tuple(
             int(max(ARP_STEP_MIN, min(ARP_STEP_MAX, s + rng.integers(-2, 3))))

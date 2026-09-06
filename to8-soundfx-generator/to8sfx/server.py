@@ -295,6 +295,9 @@ def _render_design(params: dict) -> dict:
         "curves": {
             "freq": [round(opll.fnum_block_to_freq(f.fnum, f.block), 2) for f in used],
             "volume": [f.volume for f in used],
+            # Sans elle, le dessin n'a pas de quoi colorer les bandes de timbre
+            # et rend une couleur unique, quel que soit le son.
+            "instrument": [f.instrument for f in used],
             "noise": list(noise) if noise else [],
         },
         "preview": f"/api/preview.wav?t={STATE['counter']}",
