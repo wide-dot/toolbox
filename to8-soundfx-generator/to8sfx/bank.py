@@ -103,6 +103,7 @@ class Bank:
             block = codegen.to_asm(s.name, channel, cmds, priority=s.priority,
                                    source=source)
             if s.params.noise_on:
+                avant = block
                 block = block.replace(
                     f"; {s.name} - genere par to8-soundfx-generator",
                     f"; {s.name} - genere par to8-soundfx-generator\n"
@@ -111,6 +112,18 @@ class Bank:
                     "; Le registre $0E requisitionne les voies 6, 7 et 8 de la\n"
                     "; puce. Si la musique du jeu s'en sert, son etat de batterie\n"
                     "; sera ecrase pendant la duree du bruitage.", 1)
+                if block == avant:
+                    # str.replace() qui ne trouve rien rend la chaine inchangee,
+                    # sans la moindre erreur : sans ce garde-fou, un changement
+                    # de format dans codegen.to_asm ferait disparaitre
+                    # l'avertissement en silence, et l'utilisateur livrerait un
+                    # bruitage qui ecrase la batterie de la musique sans le savoir.
+                    raise RuntimeError(
+                        f"{s.name} : l'avertissement de couche bruit n'a pas pu etre "
+                        "insere - le format d'en-tete de codegen.to_asm a change. "
+                        "Sans lui, un bruitage qui requisitionne les voies 6 a 8 "
+                        "serait livre sans prevenir qu'il ecrase la batterie de la "
+                        "musique.")
             blocks.append(block)
 
             if info["truncated"]:
