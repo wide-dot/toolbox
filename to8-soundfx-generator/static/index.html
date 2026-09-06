@@ -67,7 +67,10 @@
   .badges{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
   .badge{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 11px;font-size:11.5px}
   .badge b{color:var(--accent)}
+  .badge.bad{border-color:var(--err);color:#f3c4bd}
   .badge.bad b{color:var(--err)}
+  .badge.warn{border-color:var(--warn)}
+  .badge.warn b{color:var(--warn)}
   .msg{border-left:3px solid var(--warn);background:#241f14;padding:8px 12px;border-radius:0 6px 6px 0;
     margin:8px 0;font-size:12.5px;color:#f0dcb4}
   .msg.err{border-color:var(--err);background:#2a1714;color:#f3c4bd}
@@ -646,13 +649,27 @@ async function generate(){
 }
 
 function showBadges(s, info){
-  const over = s.commands > 255;
+  // `info` porte truncated : apres troncature le compte vaut EXACTEMENT 255,
+  // donc un test `> 255` ne se declenchait jamais et le badge restait neutre
+  // alors que la fin du son avait ete coupee.
+  const coupe = !!(info && info.truncated);
+  const serre = !coupe && s.commands > 220;
+  const etat = coupe ? 'bad' : (serre ? 'warn' : '');
+  const suffixe = coupe ? ' \u2014 TRONQU\u00c9'
+                : (serre ? ' \u2014 bient\u00f4t plein' : '');
+  const simplifie = info && (info.cents > 0 || info.vol_step > 1)
+    ? `<span class="badge warn">simplifi\u00e9 pour tenir<b> ${
+        info.cents > 0 ? info.cents.toFixed(0) + ' cents' : ''}${
+        info.cents > 0 && info.vol_step > 1 ? ', ' : ''}${
+        info.vol_step > 1 ? 'volume par ' + info.vol_step : ''}</b></span>`
+    : '';
   $('badges').innerHTML =
-    `<span class="badge ${over?'bad':''}">commandes <b>${s.commands}</b> / 255</span>`
+    `<span class="badge ${etat}">commandes <b>${s.commands}</b> / 255${suffixe}</span>`
   + `<span class="badge">taille <b>${s.bytes}</b> octets</span>`
   + `<span class="badge">durée <b>${s.seconds.toFixed(2)}</b> s</span>`
   + `<span class="badge">ticks <b>${s.ticks}</b></span>`
-  + `<span class="badge">écriture $30 <b>${s.switches}</b></span>`;
+  + `<span class="badge">écriture $30 <b>${s.switches}</b></span>`
+  + simplifie;
 }
 
 function showMsgs(list, isErr){
