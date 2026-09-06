@@ -122,6 +122,57 @@ def test_repeat_restarts_the_pattern():
     print(f"  repetition tous les 5 : {m[:12]}")
 
 
+def test_randomize_is_deterministic():
+    """Meme graine, memes parametres : sans quoi l'historique et la banque ne
+    veulent rien dire."""
+    for cat in design.CATEGORIES:
+        a = design.randomize(cat, seed=1234)
+        b = design.randomize(cat, seed=1234)
+        assert a.to_dict() == b.to_dict(), f"{cat} n'est pas deterministe"
+    c = design.randomize("tir", seed=1)
+    d = design.randomize("tir", seed=2)
+    assert c.to_dict() != d.to_dict(), "deux graines donnent le meme son"
+    print(f"  {len(design.CATEGORIES)} categories, tirage deterministe")
+
+
+def test_mutate_respects_locks_and_bounds():
+    base = design.randomize("explosion", seed=7)
+    locked = {"instrument", "f_start", "decay_frames"}
+    m = design.mutate(base, amount=0.8, locked=locked, seed=3)
+    for k in locked:
+        assert getattr(m, k) == getattr(base, k), f"{k} a bouge malgre son cadenas"
+    for k, (lo, hi) in design.BOUNDS.items():
+        v = getattr(m, k)
+        assert lo <= v <= hi, f"{k} = {v} hors de [{lo}, {hi}]"
+    assert m.to_dict() != base.to_dict(), "la mutation n'a rien change"
+    print(f"  {len(locked)} cadenas tenus, toutes les bornes respectees")
+
+
+def test_every_category_fits_the_budget():
+    """Sur 200 tirages par categorie, aucun ne doit ressortir tronque.
+
+    Verifier qu'aucun ne depasse 255 commandes ne prouverait rien :
+    fit_to_budget tronque en dernier recours, donc c'est vrai par construction.
+    """
+    from to8sfx import codegen
+
+    worst = {}
+    for cat in design.CATEGORIES:
+        truncated = 0
+        peak = 0
+        for seed in range(200):
+            p = design.randomize(cat, seed=seed)
+            frames, noise = design.render(p)
+            cmds, _, info = codegen.fit_to_budget(
+                frames, noise=noise, channel=4,
+                noise_pitch=p.noise_pitch, noise_vol=p.noise_vol)
+            peak = max(peak, len(cmds))
+            truncated += bool(info["truncated"])
+        worst[cat] = (truncated, peak)
+        assert truncated == 0, f"{cat} : {truncated}/200 tirages tronques"
+    print("  " + ", ".join(f"{c} max {p} cmd" for c, (_, p) in worst.items()))
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
