@@ -191,6 +191,23 @@
         <div><label>Nom de la banque</label><input type="text" id="bankName" value="banque"></div>
       </div>
       <div id="bankList" class="rank" style="margin-top:8px"></div>
+
+      <label style="margin-top:10px">soundFX.asm
+        <button class="ghost" id="cpAsm" style="float:right;padding:1px 8px;font-size:11px">copier</button>
+      </label>
+      <textarea id="bankAsm" readonly style="height:150px"></textarea>
+      <label>soundFX.const.asm
+        <button class="ghost" id="cpConst" style="float:right;padding:1px 8px;font-size:11px">copier</button>
+      </label>
+      <textarea id="bankConst" readonly style="height:90px"></textarea>
+      <label>banque.json &mdash; &agrave; garder pour reprendre plus tard
+        <button class="ghost" id="cpJson" style="float:right;padding:1px 8px;font-size:11px">copier</button>
+      </label>
+      <textarea id="bankJson" readonly style="height:90px"></textarea>
+      <div class="hint">Colle les deux premiers dans ton jeu, puis appelle
+        <code>_soundFX.play soundFX.MonSon,1</code>. Le troisi&egrave;me se recharge
+        avec <code>./cli.py bank banque.json --out-dir .</code>&nbsp;: sans lui,
+        la banque meurt en fermant le serveur.</div>
     </fieldset>
   </div>
 
@@ -916,6 +933,11 @@ async function refreshBank(){
     t.textContent = `total ${b.build.bytes} octets`;
     el.appendChild(t);
   }
+  // Les deux fichiers et le JSON, copiables : c'est la sortie de tout l'outil.
+  $('bankAsm').value = b.build.asm || '';
+  $('bankConst').value = b.build.const || '';
+  $('bankJson').value = b.sounds.length
+    ? await (await fetch('/api/bank/export.json')).text() : '';
   (b.build.warnings || []).forEach(w => {
     const d = document.createElement('div'); d.style.color = '#e8a33d'; d.textContent = '⚠ ' + w;
     el.appendChild(d);
@@ -976,6 +998,14 @@ audioSrc.addEventListener('timeupdate', ()=>{
 $('gen').onclick = () => (mode === 'wav' ? generate() : render());
 $('copy').onclick = async ()=>{ await navigator.clipboard.writeText($('asm').value);
   $('copied').textContent='copié'; setTimeout(()=>$('copied').textContent='',1500); };
+
+const copier = (bouton, champ) => { $(bouton).onclick = async e => {
+  e.preventDefault();
+  await navigator.clipboard.writeText($(champ).value);
+  const t = $(bouton).textContent; $(bouton).textContent = 'copié';
+  setTimeout(() => { $(bouton).textContent = t; }, 1200);
+}; };
+copier('cpAsm', 'bankAsm'); copier('cpConst', 'bankConst'); copier('cpJson', 'bankJson');
 
 // ---------- reactivite ----------
 $('instrument_mode').onchange = e => {

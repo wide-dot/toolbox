@@ -449,6 +449,15 @@ class Handler(BaseHTTPRequestHandler):
             })
         if path == "/api/bank":
             return self._json(_bank_view())
+        if path == "/api/bank/export.json":
+            # La banque doit pouvoir sortir de la page : sans ca elle meurt avec
+            # le serveur, et cli.py bank reclame un JSON que rien ne produirait.
+            #
+            # Pas de `with LOCK` ici : _bank() prend deja le verrou pour sa
+            # creation paresseuse, et threading.Lock n'est pas reentrant —
+            # l'imbriquer bloquait la requete indefiniment.
+            return self._send(200, _bank().to_json().encode(),
+                              "application/json; charset=utf-8")
         if path == "/api/variant.wav":
             from urllib.parse import parse_qs
             i = int(parse_qs(urlparse(self.path).query).get("i", ["-1"])[0])
