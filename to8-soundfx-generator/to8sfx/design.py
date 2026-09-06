@@ -118,7 +118,9 @@ BOUNDS: dict[str, tuple[float, float]] = {
     "vibrato_cents": (0.0, 1200.0),
     "jitter_cents": (0.0, 1200.0),
     "arp_frames": (0, 8),
-    "inst_frames": (0, 40),
+    # Jusqu'a la duree maximale : avec un plafond plus bas, un son long
+    # rebouclait forcement sur la premiere bande faute de pouvoir l'atteindre.
+    "inst_frames": (0, MAX_FRAMES),
     "instrument": (1, 15),
     "repeat_frames": (0, 60),
     "noise_hits": (0, 40),

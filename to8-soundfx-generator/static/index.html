@@ -933,8 +933,27 @@ function paintBands(){
       ? `Cycle de ${cycle} trames pour un son de ${duree} : ${muettes} bande(s) `
         + `jamais jouee(s). Baisser inst_frames, ou allonger la duree.`
       : `Cycle de ${cycle} trames, son de ${duree} — toutes les bandes sont jouees`
-        + (duree > cycle ? `, et le motif reboucle ${(duree / cycle).toFixed(1)} fois.` : '.');
+        + (duree > cycle
+            ? `, puis le motif reboucle ${(duree / cycle).toFixed(1)} fois et le son `
+              + `se termine sur la bande ${Math.floor(((duree - 1) % cycle) / cadence) + 1}.`
+            : '.');
     box.appendChild(info);
+  }
+
+  // Un bouton pour le cas le plus courant : que les bandes couvrent le son une
+  // fois, sans reboucler. Le calcul a la main demande de diviser la duree par le
+  // nombre de bandes a chaque fois qu'on en ajoute une.
+  if (steps.length){
+    const repartir = document.createElement('button');
+    repartir.className = 'ghost';
+    repartir.textContent = 'r\u00e9partir sur la dur\u00e9e';
+    repartir.title = 'une bande apres l\'autre sur tout le son, sans rebouclage';
+    repartir.style.cssText = 'align-self:center;padding:6px 10px;font-size:11px';
+    repartir.onclick = () => {
+      CUR.inst_frames = Math.max(1, Math.ceil(duree / steps.length));
+      paintParams(); render();
+    };
+    box.appendChild(repartir);
   }
 
   const plus = document.createElement('button');
