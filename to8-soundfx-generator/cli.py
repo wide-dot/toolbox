@@ -79,6 +79,10 @@ def _emit(args, frames, source_label, envelope=None):
 
 def cmd_create(args):
     from to8sfx import design as dz
+    from to8sfx import rhythm
+    # Quatrieme frontiere qui produit de l'assembleur : elle n'emprunte ni le
+    # serveur ni la banque, donc elle porte le garde elle-meme.
+    rhythm.check_any_channel(args.channel)
     p = dz.randomize(args.category, args.seed)
     frames, noise = dz.render(p)
     cmds, _used, info = codegen.fit_to_budget(
