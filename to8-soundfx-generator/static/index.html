@@ -45,10 +45,6 @@
   input[type=text],input[type=number],select{width:100%;background:#12141a;border:1px solid var(--line);
     color:var(--ink);border-radius:6px;padding:6px 8px;font:inherit}
   input[type=range]{width:100%;accent-color:var(--accent)}
-  /* Jauges verticales des bandes de timbre. writing-mode est la voie moderne,
-     slider-vertical couvre les WebKit plus anciens. */
-  input.vjauge{width:22px;height:86px;writing-mode:vertical-lr;direction:rtl;
-    -webkit-appearance:slider-vertical;margin:0}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
   .tabs{display:flex;gap:6px;margin-bottom:12px}
@@ -179,15 +175,7 @@
         <i>arp_frames</i> trames. C'est le geste le plus reconnaissable du son de
         puce&nbsp;: il fait tenir un accord sur une voie qui n'en joue qu'une.
         Sans marches, <i>arp_frames</i> ne fait rien.</div>
-      <label>Timbres par bandes</label>
-      <div id="instBands" class="row" style="flex-wrap:wrap;gap:4px"></div>
-      <div class="hint">Une colonne par bande, dans l'ordre o&ugrave; elles sont
-        jou&eacute;es&nbsp;: la jauge fixe le num&eacute;ro du timbre, <b>+</b> ajoute une bande,
-        <b>&times;</b> la retire. Le son passe d'une bande &agrave; la suivante toutes les
-        <i>inst_frames</i> trames, puis reboucle. Aucune bande&nbsp;: le son garde
-        le timbre unique du curseur <i>instrument</i>. Presque gratuit en
-        octets &mdash; le registre $30 porte l'instrument et le volume ensemble,
-        donc le changement se greffe sur une &eacute;criture d&eacute;j&agrave; n&eacute;cessaire.</div>
+
 
       <div id="sliders"></div>
     </fieldset>
@@ -338,6 +326,17 @@
     <span><i class="k" style="background:#e8b04b"></i>volume</span>
     <span><i class="k" style="background:#7aa2f7"></i>instrument par trame</span>
   </div>
+
+  <fieldset id="bandsBox" style="margin-top:10px">
+    <legend>Timbres par bandes</legend>
+    <div id="instBands" class="row" style="flex-wrap:wrap;gap:8px;align-items:flex-start"></div>
+    <div class="hint">Une case par bande, dans l'ordre o&ugrave; elles sont jou&eacute;es.
+      Le son passe d'une bande &agrave; la suivante toutes les <i>inst_frames</i> trames,
+      puis reboucle. Aucune bande&nbsp;: le son garde le timbre unique du curseur
+      <i>instrument</i>. Presque gratuit en octets &mdash; le registre $30 porte
+      l'instrument et le volume ensemble, donc le changement se greffe sur une
+      &eacute;criture d&eacute;j&agrave; n&eacute;cessaire.</div>
+  </fieldset>
 
   <div id="melodyOut" class="rank" style="margin-bottom:6px"></div>
   <div id="rank" class="rank"></div>
@@ -844,30 +843,46 @@ function paintBands(){
 
   steps.forEach((v, i) => {
     const col = document.createElement('div');
-    col.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:3px';
-    const j = document.createElement('input');
-    j.type = 'range'; j.className = 'vjauge';
-    j.min = 1; j.max = 15; j.step = 1; j.value = v;
-    j.title = `bande ${i + 1} — ${INIT.instruments[String(v)] || ''}`;
-    j.oninput = () => {
-      CUR.inst_steps = steps.map((x, k) => k === i ? +j.value : x);
-      paintBands(); render();
+    col.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;'
+      + 'border:1px solid var(--line);border-radius:6px;padding:5px 7px;background:var(--panel)';
+
+    const cran = (d) => {
+      const b = document.createElement('button');
+      b.className = 'ghost';
+      b.textContent = d > 0 ? '\u25B2' : '\u25BC';
+      b.title = d > 0 ? 'timbre suivant' : 'timbre precedent';
+      b.style.cssText = 'padding:0 8px;line-height:1.3;font-size:10px';
+      b.onclick = () => {
+        const n = Math.max(1, Math.min(15, v + d));
+        CUR.inst_steps = steps.map((x, k) => k === i ? n : x);
+        paintBands(); render();
+      };
+      return b;
     };
-    const n = document.createElement('b');
-    n.style.cssText = 'font-size:10px;color:var(--accent)';
-    n.textContent = v;
+
+    const num = document.createElement('b');
+    num.style.cssText = 'font-size:15px;color:var(--accent);line-height:1.1';
+    num.textContent = v;
+
     const nom = document.createElement('span');
-    nom.style.cssText = 'font-size:9px;color:var(--dim);max-width:44px;text-align:center;line-height:1.1';
-    nom.textContent = (INIT.instruments[String(v)] || '').split(' ')[0];
+    nom.style.cssText = 'font-size:9.5px;color:var(--dim);max-width:70px;'
+      + 'text-align:center;line-height:1.15';
+    nom.textContent = INIT.instruments[String(v)] || '';
+
+    const rang = document.createElement('span');
+    rang.style.cssText = 'font-size:9px;color:var(--dim)';
+    rang.textContent = 'bande ' + (i + 1);
+
     const x = document.createElement('button');
     x.className = 'ghost'; x.textContent = '\u00d7'; x.title = 'retirer cette bande';
-    x.style.cssText = 'padding:0 5px;font-size:10px;line-height:1.3';
+    x.style.cssText = 'padding:0 6px;font-size:10px;line-height:1.3;margin-top:2px';
     x.onclick = () => {
       CUR.inst_steps = steps.filter((_, k) => k !== i);
       if (!CUR.inst_steps.length) CUR.inst_frames = 0;
       paintParams(); render();
     };
-    col.append(j, n, nom, x);
+
+    col.append(cran(+1), num, cran(-1), nom, rang, x);
     box.appendChild(col);
   });
 
@@ -875,7 +890,7 @@ function paintBands(){
   plus.className = 'chip';
   plus.textContent = '+';
   plus.title = 'ajouter une bande';
-  plus.style.cssText = 'align-self:center;padding:6px 10px';
+  plus.style.cssText = 'align-self:center;padding:14px 14px;font-size:15px';
   plus.onclick = () => {
     CUR.inst_steps = [...steps, steps.length ? steps[steps.length - 1] : CUR.instrument];
     // Des bandes sans cadence ne changeraient jamais.
