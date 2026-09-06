@@ -192,22 +192,8 @@
       </div>
       <div id="bankList" class="rank" style="margin-top:8px"></div>
 
-      <label style="margin-top:10px">soundFX.asm
-        <button class="ghost" id="cpAsm" style="float:right;padding:1px 8px;font-size:11px">copier</button>
-      </label>
-      <textarea id="bankAsm" readonly style="height:150px"></textarea>
-      <label>soundFX.const.asm
-        <button class="ghost" id="cpConst" style="float:right;padding:1px 8px;font-size:11px">copier</button>
-      </label>
-      <textarea id="bankConst" readonly style="height:90px"></textarea>
-      <label>banque.json &mdash; &agrave; garder pour reprendre plus tard
-        <button class="ghost" id="cpJson" style="float:right;padding:1px 8px;font-size:11px">copier</button>
-      </label>
-      <textarea id="bankJson" readonly style="height:90px"></textarea>
-      <div class="hint">Colle les deux premiers dans ton jeu, puis appelle
-        <code>_soundFX.play soundFX.MonSon,1</code>. Le troisi&egrave;me se recharge
-        avec <code>./cli.py bank banque.json --out-dir .</code>&nbsp;: sans lui,
-        la banque meurt en fermant le serveur.</div>
+      <div class="hint">Les fichiers produits s'affichent &agrave; droite, dans les
+        onglets <b>soundFX.asm</b>, <b>const</b> et <b>banque.json</b>.</div>
     </fieldset>
   </div>
 
@@ -331,14 +317,24 @@
   <div id="melodyOut" class="rank" style="margin-bottom:6px"></div>
   <div id="rank" class="rank"></div>
 
-  <div class="bar" style="margin-top:14px">
-    <button class="ghost" id="copy">Copier l'assembleur</button>
+  <div class="tabs" style="margin-top:14px">
+    <button id="outCur" class="on">Son courant</button>
+    <button id="outAsm">soundFX.asm</button>
+    <button id="outConst">soundFX.const.asm</button>
+    <button id="outJson">banque.json</button>
+  </div>
+  <div class="bar">
+    <button class="ghost" id="copy">Copier</button>
     <span class="hint" id="copied"></span>
   </div>
   <textarea id="asm" spellcheck="false" readonly></textarea>
-  <div class="hint">&Agrave; coller dans <code>objects/soundFX/soundFX.asm</code>, plus une entr&eacute;e
-    <code>fdb</code> dans <code>soundFX.soundTable</code> et un <code>equ</code> dans
-    <code>soundFX.const.asm</code> &mdash; dans le m&ecirc;me ordre.</div>
+  <textarea id="bankAsm" spellcheck="false" readonly class="hide"></textarea>
+  <textarea id="bankConst" spellcheck="false" readonly class="hide"></textarea>
+  <textarea id="bankJson" spellcheck="false" readonly class="hide"></textarea>
+  <div class="hint" id="outHint">&Agrave; coller dans <code>objects/soundFX/soundFX.asm</code>,
+    plus une entr&eacute;e <code>fdb</code> dans <code>soundFX.soundTable</code> et un
+    <code>equ</code> dans <code>soundFX.const.asm</code> &mdash; dans le m&ecirc;me ordre.
+    Les onglets de la banque, eux, produisent ces fichiers <i>complets</i> et coh&eacute;rents.</div>
 </div>
 </div>
 
@@ -1025,16 +1021,22 @@ audioSrc.addEventListener('timeupdate', ()=>{
   }
 });
 $('gen').onclick = () => (mode === 'wav' ? generate() : render());
-$('copy').onclick = async ()=>{ await navigator.clipboard.writeText($('asm').value);
+$('copy').onclick = async ()=>{ await navigator.clipboard.writeText($(sortie).value);
   $('copied').textContent='copié'; setTimeout(()=>$('copied').textContent='',1500); };
 
-const copier = (bouton, champ) => { $(bouton).onclick = async e => {
-  e.preventDefault();
-  await navigator.clipboard.writeText($(champ).value);
-  const t = $(bouton).textContent; $(bouton).textContent = 'copié';
-  setTimeout(() => { $(bouton).textContent = t; }, 1200);
-}; };
-copier('cpAsm', 'bankAsm'); copier('cpConst', 'bankConst'); copier('cpJson', 'bankJson');
+// Un seul bouton Copier, qui copie l'onglet regarde : quatre boutons dans la
+// colonne etroite se marchaient dessus, et on ne savait plus lequel copiait quoi.
+const ONGLETS = [['outCur','asm'], ['outAsm','bankAsm'],
+                 ['outConst','bankConst'], ['outJson','bankJson']];
+let sortie = 'asm';
+function montrerSortie(champ){
+  sortie = champ;
+  for (const [bouton, zone] of ONGLETS){
+    $(bouton).classList.toggle('on', zone === champ);
+    $(zone).classList.toggle('hide', zone !== champ);
+  }
+}
+for (const [bouton, zone] of ONGLETS) $(bouton).onclick = () => montrerSortie(zone);
 
 // ---------- reactivite ----------
 $('instrument_mode').onchange = e => {
