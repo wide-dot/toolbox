@@ -98,6 +98,39 @@ def test_encode_refuses_a_rhythm_register_on_an_out_of_range_channel():
     print("  encode refuse les registres rythmiques au-dela de la voie 5")
 
 
+def test_any_channel_outside_the_chip_is_refused():
+    """La voie part dans le deuxieme octet de l'en-tete du bloc, et le driver
+    l'ajoute aux numeros de registres. Une valeur aberrante s'y ecrivait telle
+    quelle : le bruitage allait ecrire n'importe ou dans la puce, sans un mot.
+
+    C'est la contrainte GENERALE de la puce, distincte de celle du mode rythme :
+    la voie 7 existe, elle est seulement interdite a la couche bruit.
+    """
+    for voie in (-1, 9, 42):
+        try:
+            rhythm.check_any_channel(voie)
+        except ValueError:
+            continue
+        raise AssertionError(f"voie {voie} acceptee alors qu'elle n'existe pas")
+    for voie in range(rhythm.CHANNEL_MIN, rhythm.CHANNEL_MAX + 1):
+        rhythm.check_any_channel(voie)  # ne doit pas lever
+    print(f"  voies {rhythm.CHANNEL_MIN} a {rhythm.CHANNEL_MAX} acceptees, "
+          "au-dela refusees")
+
+
+def test_noise_check_reports_the_general_constraint_first():
+    """Sur une voie inexistante, "voie 42 inexistante" est plus utile que
+    "couche bruit impossible sur la voie 42", qui laisserait croire qu'il
+    suffirait de couper les percussions."""
+    try:
+        rhythm.check_channel(42)
+    except ValueError as e:
+        assert "inexistante" in str(e), str(e)
+        print("  la contrainte generale est signalee avant celle du bruit")
+        return
+    raise AssertionError("voie 42 acceptee par check_channel")
+
+
 def test_each_percussion_is_actually_noisy():
     """La caisse claire et la charleston doivent produire du bruit, pas un son
     pur : c'est toute la raison d'etre de cette couche."""

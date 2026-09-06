@@ -70,6 +70,21 @@ def test_noise_layer_refuses_a_channel_above_six():
     raise AssertionError("voie 8 acceptee avec la couche bruit")
 
 
+def test_channel_outside_the_chip_is_refused():
+    """Sans ce garde, `fcb 42` partait comme deuxieme octet d'en-tete et le
+    driver ajoutait 42 aux numeros de registres — silencieusement."""
+    b = bank.Bank(default_channel=42)
+    b.sounds.append(bank.BankSound(name="X", category="tir",
+                                   params=design.randomize("tir", seed=1)))
+    try:
+        b.build()
+    except ValueError as exc:
+        assert "42" in str(exc), str(exc)
+        print("  voie 42 refusee a l'export")
+        return
+    raise AssertionError("voie 42 acceptee, elle serait partie dans le .asm")
+
+
 def test_duplicate_names_are_refused():
     b = _bank()
     b.sounds.append(bank.BankSound(name="Laser", category="tir",

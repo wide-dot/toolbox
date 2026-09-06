@@ -50,8 +50,29 @@ _PITCH_HZ = [40.0 * (300.0 / 40.0) ** (i / 15.0) for i in range(16)]
 PITCH_TABLE = [freq_to_fnum_block(f) for f in _PITCH_HZ]
 
 
+# Le YM2413 a neuf voies melodiques. C'est la contrainte generale, valable
+# couche bruit ou non ; MAX_CHANNEL y ajoute celle, plus stricte, du mode rythme.
+CHANNEL_MIN, CHANNEL_MAX = 0, 8
+
+
+def check_any_channel(channel: int) -> None:
+    """Voie existante sur la puce.
+
+    Sans ce garde, une voie aberrante partait telle quelle dans le deuxieme
+    octet de l'en-tete du bloc, et le driver l'ajoutait aux numeros de
+    registres : le bruitage ecrivait n'importe ou dans la puce, sans un mot.
+    """
+    if not CHANNEL_MIN <= int(channel) <= CHANNEL_MAX:
+        raise ValueError(
+            f"voie YM2413 {channel} inexistante : la puce en a neuf, "
+            f"numerotees {CHANNEL_MIN} a {CHANNEL_MAX}.")
+
+
 def check_channel(channel: int) -> None:
     """Leve ValueError si la couche bruit ne peut pas viser juste sur cette voie."""
+    # La contrainte generale d'abord : "voie 42 inexistante" est plus utile que
+    # "couche bruit impossible sur la voie 42".
+    check_any_channel(channel)
     if not 0 <= channel <= MAX_CHANNEL:
         raise ValueError(
             f"couche bruit impossible sur la voie {channel} : le mode rythme "
@@ -109,4 +130,5 @@ def mask_of(names) -> int:
 
 
 __all__ = ["RHYTHM_ON", "HITS", "KIT_ORDER", "MAX_CHANNEL", "PITCH_TABLE",
-           "REG_RHYTHM", "check_channel", "encode", "arm_writes", "mask_of"]
+           "CHANNEL_MIN", "CHANNEL_MAX", "REG_RHYTHM", "check_any_channel",
+           "check_channel", "encode", "arm_writes", "mask_of"]
