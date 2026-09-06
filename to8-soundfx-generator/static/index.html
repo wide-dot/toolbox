@@ -333,6 +333,7 @@
     <button id="outAsm">soundFX.asm</button>
     <button id="outConst">soundFX.const.asm</button>
     <button id="outJson">banque.json</button>
+    <button id="outListen">&#9654; &Eacute;couter du code</button>
   </div>
   <div class="bar">
     <button class="ghost" id="copy">Copier</button>
@@ -342,6 +343,18 @@
   <textarea id="bankAsm" spellcheck="false" readonly class="hide"></textarea>
   <textarea id="bankConst" spellcheck="false" readonly class="hide"></textarea>
   <textarea id="bankJson" spellcheck="false" readonly class="hide"></textarea>
+  <div id="listenWrap" class="hide">
+    <div class="bar" style="margin-bottom:8px">
+      <button class="act" id="doListen">&#9654; &Eacute;couter</button>
+      <select id="listenLabel" style="width:auto;min-width:220px"></select>
+      <span class="hint" id="listenInfo"></span>
+    </div>
+    <textarea id="listenAsm" spellcheck="false"
+      placeholder="Coller ici un bloc soundFX deja ecrit — ou tout un soundFX.asm, les blocs seront listes."></textarea>
+    <div class="hint">Pour r&eacute;&eacute;couter un bruitage d&eacute;j&agrave; dans le jeu quand on ne
+      sait plus ce qu'il fait. Le code est relu tel quel et rejou&eacute; sur
+      l'&eacute;mulateur&nbsp;: ce que tu entends est ce que la puce recevra.</div>
+  </div>
   <div class="hint" id="outHint">&Agrave; coller dans <code>objects/soundFX/soundFX.asm</code>,
     plus une entr&eacute;e <code>fdb</code> dans <code>soundFX.soundTable</code> et un
     <code>equ</code> dans <code>soundFX.const.asm</code> &mdash; dans le m&ecirc;me ordre.
@@ -1032,16 +1045,35 @@ audioSrc.addEventListener('timeupdate', ()=>{
   }
 });
 $('gen').onclick = () => (mode === 'wav' ? generate() : render());
+// Relire un bloc existant : la zone collee est le seul endroit modifiable.
+async function ecouter(){
+  const d = await post('/api/listen', {asm: $('listenAsm').value,
+                                       label: $('listenLabel').value});
+  if (d.error){ showMsgs([d.error], true); return; }
+  const sel = $('listenLabel');
+  sel.innerHTML = '';
+  d.labels.forEach(l => { const o = document.createElement('option');
+    o.value = l; o.textContent = l; sel.appendChild(o); });
+  sel.value = d.label;
+  $('listenInfo').textContent = `voie ${d.channel} · ${d.stats.commands} commandes · `
+    + `${d.stats.bytes} octets · ${d.stats.seconds.toFixed(2)} s`;
+  play(d.preview);
+}
+$('doListen').onclick = ecouter;
+$('listenLabel').onchange = ecouter;
+
 $('copy').onclick = async ()=>{ await navigator.clipboard.writeText($(sortie).value);
   $('copied').textContent='copié'; setTimeout(()=>$('copied').textContent='',1500); };
 
 // Un seul bouton Copier, qui copie l'onglet regarde : quatre boutons dans la
 // colonne etroite se marchaient dessus, et on ne savait plus lequel copiait quoi.
 const ONGLETS = [['outCur','asm'], ['outAsm','bankAsm'],
-                 ['outConst','bankConst'], ['outJson','bankJson']];
+                 ['outConst','bankConst'], ['outJson','bankJson'],
+                 ['outListen','listenWrap']];
 let sortie = 'asm';
 function montrerSortie(champ){
   sortie = champ;
+  $('copy').classList.toggle('hide', champ === 'listenWrap');
   for (const [bouton, zone] of ONGLETS){
     $(bouton).classList.toggle('on', zone === champ);
     $(zone).classList.toggle('hide', zone !== champ);

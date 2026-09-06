@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 import threading
 import webbrowser
@@ -407,6 +408,39 @@ def _bank_settings(params: dict) -> dict:
     return _bank_view()
 
 
+def _listen(params: dict) -> dict:
+    """Rejoue un bloc soundFX deja ecrit, colle tel quel.
+
+    On oublie vite ce que fait un bloc dans un jeu : il n'y a que des octets et
+    un nom. Relire le code plutot que le regenerer evite aussi de se demander si
+    ce qu'on entend correspond bien a ce qui est dans le depot.
+    """
+    texte = params.get("asm") or ""
+    etiquettes = re.findall(r"^(soundFX\.\w+\.data)\s*$", texte, re.M)
+    if not etiquettes:
+        raise ValueError(
+            "aucun bloc trouve : coller un source contenant une etiquette de la "
+            "forme `soundFX.MonSon.data` seule sur sa ligne.")
+
+    label = params.get("label") or ""
+    if label not in etiquettes:
+        label = etiquettes[0]
+
+    channel, cmds = importer.parse_asm_sound(texte, label)
+    st = codegen.stats(cmds)
+    ev, nsamples = codegen.commands_to_events(cmds, channel)
+    with LOCK:
+        STATE["counter"] += 1
+        STATE["preview_wav"] = importer.wav_bytes(opll.render(ev, nsamples))
+    return {
+        "labels": etiquettes,
+        "label": label,
+        "channel": channel,
+        "stats": st,
+        "preview": f"/api/preview.wav?t={STATE['counter']}",
+    }
+
+
 # --- HTTP -------------------------------------------------------------------
 
 
@@ -523,6 +557,9 @@ class Handler(BaseHTTPRequestHandler):
                 p = design.randomize(params.get("category", "tir"),
                                      int(params.get("seed", 0)))
                 return self._json(_render_design({**params, "params": p.to_dict()}))
+
+            if path == "/api/listen":
+                return self._json(_listen(json.loads(body or b"{}")))
 
             if path == "/api/design/render":
                 return self._json(_render_design(json.loads(body or b"{}")))
