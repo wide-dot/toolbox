@@ -73,7 +73,7 @@
 <div class="side">
 
   <div class="tabs">
-    <button id="tabParam" class="on">Param&eacute;trique</button>
+    <button id="tabCreate" class="on">Cr&eacute;er</button>
     <button id="tabWav">Fichier audio</button>
   </div>
 
@@ -99,33 +99,51 @@
     </fieldset>
   </div>
 
-  <!-- ---------- mode parametrique ---------- -->
-  <div id="panParam">
-    <fieldset><legend>Preset</legend>
-      <select id="preset"></select>
-      <div class="hint">Point de d&eacute;part, &agrave; retoucher &agrave; l'oreille.</div>
+  <!-- ---------- mode creation ---------- -->
+  <div id="panCreate">
+    <fieldset><legend>Cat&eacute;gorie</legend>
+      <div id="cats" class="row" style="flex-wrap:wrap;gap:6px"></div>
+      <button id="roll" style="width:100%;margin-top:10px;padding:10px;font-weight:600">
+        TIRER AU SORT
+      </button>
+      <label style="margin-top:10px">Force de la mutation <span id="vAmt">30</span> %</label>
+      <input type="range" id="amount" min="5" max="100" step="5" value="30">
+      <button id="mutate" style="width:100%;padding:8px">MUTER &mdash; 8 variantes</button>
+      <div id="variants" class="row" style="flex-wrap:wrap;gap:4px;margin-top:8px"></div>
+      <div class="hint">Clic = &eacute;couter, re-clic = adopter.</div>
     </fieldset>
-    <fieldset><legend>Balayage</legend>
-      <label>Dur&eacute;e (ms) <span id="vDur">400</span></label>
-      <input type="range" id="duration_ms" min="40" max="2000" step="20" value="400">
+
+    <fieldset><legend>Affiner</legend>
+      <div class="hint">Le cadenas emp&ecirc;che la mutation de toucher un r&eacute;glage.
+        C'est comme &ccedil;a qu'on converge&nbsp;: on fige ce qui est bon, on relance
+        le hasard sur le reste.</div>
+      <div id="sliders"></div>
+    </fieldset>
+
+    <fieldset><legend>Couche bruit &mdash; section rythme</legend>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:0">
+        <input type="checkbox" id="noise_on" style="width:auto"> Activer les percussions
+      </label>
+      <div class="hint"><b>Attention</b>&nbsp;: le registre $0E requisitionne les voies
+        6, 7 et 8 de la puce. Si la musique du jeu s'en sert &mdash; c'est le cas de
+        battlesquadron &mdash; son &eacute;tat de batterie sera &eacute;cras&eacute; pendant le
+        bruitage. Voies utilisables&nbsp;: 0 &agrave; 5.</div>
+      <div id="kit" class="row" style="flex-wrap:wrap;gap:6px"></div>
+    </fieldset>
+
+    <fieldset><legend>Banque</legend>
       <div class="row">
-        <div><label>f d&eacute;but (Hz)</label><input type="number" id="f_start" value="900"></div>
-        <div><label>f fin (Hz)</label><input type="number" id="f_end" value="90"></div>
+        <div><label>Nom du son</label><input type="text" id="sndName" value="NewSound"></div>
+        <div><label>Voie YM2413</label><input type="number" id="sndChannel" min="0" max="8"></div>
       </div>
-      <label>Courbe de hauteur</label>
-      <select id="pitch_curve"><option value="exp">exponentielle</option><option value="lin">lin&eacute;aire</option></select>
-      <div class="row">
-        <div><label>Volume d&eacute;but</label><input type="number" id="vol_start" min="0" max="15" value="0"></div>
-        <div><label>Volume fin</label><input type="number" id="vol_end" min="0" max="15" value="15"></div>
+      <div class="hint">Vide = la voie par d&eacute;faut de la banque. L'outil ne peut pas
+        deviner ce que la musique de ton jeu occupe.</div>
+      <button id="keep" style="width:100%;padding:8px;margin-top:8px">GARDER DANS LA BANQUE</button>
+      <div class="row" style="margin-top:10px">
+        <div><label>Voie par d&eacute;faut</label><input type="number" id="bankChannel" min="0" max="8" value="4"></div>
+        <div><label>Nom de la banque</label><input type="text" id="bankName" value="banque"></div>
       </div>
-      <div class="hint">0 = fort, 15 = faible (4 bits, 3 dB par cran)</div>
-      <label>Jitter de hauteur (cents) <span id="vJit">0</span></label>
-      <input type="range" id="jitter_cents" min="0" max="900" step="10" value="0">
-      <div class="hint">Fort jitter = substitut de bruit, pour les explosions.</div>
-      <div class="row">
-        <div><label>Vibrato (Hz)</label><input type="number" id="vibrato_hz" value="0"></div>
-        <div><label>Vibrato (cents)</label><input type="number" id="vibrato_cents" value="0"></div>
-      </div>
+      <div id="bankList" class="rank" style="margin-top:8px"></div>
     </fieldset>
   </div>
 
@@ -257,7 +275,7 @@
 
 <script>
 const $ = id => document.getElementById(id);
-let PRESETS = {}, INSTS = {}, hasSource = false, lastPreview = null;
+let INSTS = {}, hasSource = false, lastPreview = null;
 let audioOut = new Audio(), audioSrc = new Audio();
 let SRC = null;                 // {duration, peaks, voiced} du fichier charge
 let sel = {a: 0, b: 0};         // selection en secondes
@@ -265,17 +283,11 @@ const TICK = 0.02;              // une trame du driver : la vraie resolution
 const snap = t => Math.round(t / TICK) * TICK;
 
 // ---------- init ----------
-// d.presets a disparu du cote serveur (mode parametrique remplace par l'onglet
-// Creer) : PRESETS reste donc {} ici. La boucle juste en dessous ne produit
-// alors aucune option, et applyPreset() est deja garde par `if(!p) return;` -
-// le reste de l'init (instruments, gammes, notes) doit continuer de tourner
-// meme sans presets, sinon l'onglet Fichier audio se retrouve prive de son
-// selecteur d'instrument.
+// Le mode parametrique a disparu (remplace par l'onglet Creer, sur
+// /api/design/*) : /api/presets ne sert plus qu'a peupler les listes
+// communes a l'onglet Fichier audio (instruments, gammes, notes).
 fetch('/api/presets').then(r=>r.json()).then(d=>{
-  PRESETS = d.presets || {}; INSTS = d.instruments;
-  const p = $('preset');
-  Object.keys(PRESETS).forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; p.appendChild(o); });
-  p.value = 'explosion';
+  INSTS = d.instruments;
   for (const sel of [$('instrument'), $('custom_seed')]) {
     Object.entries(INSTS).forEach(([n,name])=>{
       if (n === '0') return;
@@ -287,23 +299,9 @@ fetch('/api/presets').then(r=>r.json()).then(d=>{
     $('melodic_scale').appendChild(o); });
   (d.notes||[]).forEach((n,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=n;
     $('melodic_root').appendChild(o); });
-  applyPreset('explosion');
-  generate();
 }).catch(e=>console.error('init /api/presets a echoue :', e));
 
-function applyPreset(k){
-  const p = PRESETS[k]; if(!p) return;
-  for (const f of ['duration_ms','f_start','f_end','vol_start','vol_end','jitter_cents','vibrato_hz','vibrato_cents'])
-    $(f).value = p[f];
-  $('pitch_curve').value = p.pitch_curve;
-  $('instrument').value = String(p.instrument);
-  $('name').value = k.split('-').map(s=>s[0].toUpperCase()+s.slice(1)).join('');
-  syncLabels();
-}
-
 function syncLabels(){
-  $('vDur').textContent = $('duration_ms').value;
-  $('vJit').textContent = $('jitter_cents').value;
   $('vSmooth').textContent = $('smooth').value;
   $('vShift').textContent = $('pitch_shift').value;
   $('vGain').textContent = $('gain_db').value;
@@ -315,12 +313,13 @@ function syncLabels(){
 }
 
 // ---------- onglets ----------
-let mode = 'param';
-$('tabParam').onclick = ()=>{ mode='param'; $('tabParam').classList.add('on'); $('tabWav').classList.remove('on');
-  $('panParam').classList.remove('hide'); $('panWav').classList.add('hide');
-  $('waveWrap').classList.add('hide'); generate(); };
-$('tabWav').onclick = ()=>{ mode='wav'; $('tabWav').classList.add('on'); $('tabParam').classList.remove('on');
-  $('panWav').classList.remove('hide'); $('panParam').classList.add('hide');
+let mode = 'create';
+$('tabCreate').onclick = ()=>{ mode='create'; $('tabCreate').classList.add('on');
+  $('tabWav').classList.remove('on'); $('panCreate').classList.remove('hide');
+  $('panWav').classList.add('hide'); $('waveWrap').classList.add('hide'); };
+$('tabWav').onclick = ()=>{ mode='wav'; $('tabWav').classList.add('on');
+  $('tabCreate').classList.remove('on'); $('panWav').classList.remove('hide');
+  $('panCreate').classList.add('hide');
   if(SRC){ $('waveWrap').classList.remove('hide'); drawWave(); }
   if(hasSource) generate(); };
 
@@ -468,16 +467,27 @@ function params(){
     smooth: +$('smooth').value, pitch_shift: +$('pitch_shift').value,
     gain_db: +$('gain_db').value, trim: $('trim').checked,
     start_ms: (mode==='wav' && SRC) ? sel.a*1000 : null,
-    end_ms:   (mode==='wav' && SRC) ? sel.b*1000 : null,
-    preset: $('preset').value,
-    sweep: {
-      duration_ms: +$('duration_ms').value, f_start: +$('f_start').value, f_end: +$('f_end').value,
-      pitch_curve: $('pitch_curve').value, vol_start: +$('vol_start').value, vol_end: +$('vol_end').value,
-      instrument: +$('instrument').value, jitter_cents: +$('jitter_cents').value,
-      vibrato_hz: +$('vibrato_hz').value, vibrato_cents: +$('vibrato_cents').value
-    }
+    end_ms:   (mode==='wav' && SRC) ? sel.b*1000 : null
   };
 }
+
+// Peint une reponse serveur (mode fichier ou mode creation) dans la zone de
+// sortie partagee : asm, audio, badges, messages, rang des instruments,
+// notes de la melodie, courbes. d.ranking / d.notes / d.melody peuvent
+// manquer (rendu de creation) : chaque fonction appelee ci-dessous tolere
+// deja leur absence.
+function paint(d){
+  $('asm').value = d.asm;
+  lastPreview = d.preview;
+  audioOut.src = d.preview; $('playOut').disabled = false;
+  showBadges(d.stats, d.info);
+  showMsgs(d.warnings);
+  showRank(d.ranking, d.custom_patch);
+  showMelody(d);
+  draw(d.curves, d.notes);
+}
+
+function play(url){ audioOut.src = url; audioOut.currentTime = 0; audioOut.play(); }
 
 let busy = false, again = false;
 async function generate(){
@@ -489,14 +499,7 @@ async function generate(){
                                             body: JSON.stringify(params())});
     const d = await r.json();
     if (d.error){ showMsgs([d.error], true); return; }
-    $('asm').value = d.asm;
-    lastPreview = d.preview;
-    audioOut.src = d.preview; $('playOut').disabled = false;
-    showBadges(d.stats, d.info);
-    showMsgs(d.warnings);
-    showRank(d.ranking, d.custom_patch);
-    showMelody(d);
-    draw(d.curves, d.notes);
+    paint(d);
   } finally {
     busy = false; $('gen').disabled = false;
     if (again){ again = false; generate(); }
@@ -605,6 +608,161 @@ function draw(c, notes){
   }
 }
 
+// ---------- creation ----------
+let INIT = null, CUR = null, LOCKED = new Set(), CAT = 'tir', VARIANTS = [], playing = -1;
+
+async function initCreate(){
+  INIT = await (await fetch('/api/design/init')).json();
+  const cats = $('cats');
+  for (const [k, label] of Object.entries(INIT.categories)){
+    const b = document.createElement('button');
+    b.textContent = label; b.dataset.k = k;
+    b.style.cssText = 'flex:1 0 30%;padding:6px';
+    b.onclick = () => { CAT = k; paintCats(); roll(); };
+    cats.appendChild(b);
+  }
+  paintCats();
+  buildSliders();
+  const kit = $('kit');
+  for (const k of INIT.kits){
+    const l = document.createElement('label');
+    l.style.cssText = 'display:flex;gap:4px;align-items:center;flex:1 0 30%';
+    l.innerHTML = `<input type="checkbox" data-kit="${k}" style="width:auto"> ${k}`;
+    kit.appendChild(l);
+  }
+  await roll();
+  await refreshBank();
+}
+
+function paintCats(){
+  for (const b of $('cats').children) b.classList.toggle('on', b.dataset.k === CAT);
+}
+
+function buildSliders(){
+  const box = $('sliders');
+  box.innerHTML = '';
+  for (const [key, [lo, hi]] of Object.entries(INIT.bounds)){
+    const isInt = INIT.int_params.includes(key);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:6px;align-items:center;margin:2px 0';
+    row.innerHTML =
+      `<input type="checkbox" data-lock="${key}" title="cadenas" style="width:auto">` +
+      `<label style="flex:0 0 130px;margin:0;font-size:11px">${key}</label>` +
+      `<input type="range" data-p="${key}" min="${lo}" max="${hi}" ` +
+      `step="${isInt ? 1 : (hi - lo) / 200}" style="flex:1">` +
+      `<span data-v="${key}" style="flex:0 0 52px;text-align:right;font-size:11px"></span>`;
+    box.appendChild(row);
+  }
+  box.oninput = e => {
+    if (e.target.dataset.p){ CUR[e.target.dataset.p] = +e.target.value; render(); }
+  };
+  box.onchange = e => {
+    const k = e.target.dataset.lock;
+    if (k) { e.target.checked ? LOCKED.add(k) : LOCKED.delete(k); }
+  };
+}
+
+function paintParams(){
+  for (const [key] of Object.entries(INIT.bounds)){
+    const s = document.querySelector(`[data-p="${key}"]`);
+    const v = document.querySelector(`[data-v="${key}"]`);
+    if (s) s.value = CUR[key];
+    if (v) v.textContent = (+CUR[key]).toFixed(
+      INIT.int_params.includes(key) ? 0 : 2);
+  }
+  $('noise_on').checked = !!CUR.noise_on;
+  for (const c of document.querySelectorAll('[data-kit]'))
+    c.checked = (CUR.noise_kit || []).includes(c.dataset.kit);
+}
+
+async function post(url, body){
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+                             body: JSON.stringify(body)});
+  return r.json();
+}
+
+async function roll(){
+  const d = await post('/api/design/random',
+    {category: CAT, seed: Math.floor(Math.random()*1e6), channel: chan(), name: name_()});
+  CUR = d.params; paintParams(); paint(d); play(d.preview);
+}
+
+async function render(){
+  const d = await post('/api/design/render',
+    {params: CUR, channel: chan(), name: name_(), priority: 1});
+  paint(d); play(d.preview);
+}
+
+async function mutate(){
+  const d = await post('/api/design/mutate',
+    {params: CUR, amount: +$('amount').value/100, locked: [...LOCKED],
+     seed: Math.floor(Math.random()*1e6), count: 8, channel: chan()});
+  VARIANTS = d.variants;
+  const box = $('variants'); box.innerHTML = ''; playing = -1;
+  VARIANTS.forEach((v, i) => {
+    const b = document.createElement('button');
+    b.textContent = (i+1) + ' ▸'; b.style.cssText = 'flex:1 0 20%;padding:6px';
+    b.onclick = () => {
+      if (playing === i){ CUR = v.params; paintParams(); render(); }
+      else { playing = i; play(v.preview); }
+    };
+    box.appendChild(b);
+  });
+}
+
+function chan(){ const v = $('sndChannel').value; return v === '' ? +$('bankChannel').value : +v; }
+function name_(){ return $('sndName').value || 'NewSound'; }
+
+async function refreshBank(){
+  const b = await (await fetch('/api/bank')).json();
+  const el = $('bankList');
+  el.innerHTML = b.sounds.length ? '' : '<i>banque vide</i>';
+  b.build.per_sound.forEach(s => {
+    const d = document.createElement('div');
+    d.textContent = `${s.index} ${s.name} — voie ${s.channel}, ${s.commands} cmd, ${s.bytes} o`
+      + (s.truncated ? '  ⚠ TRONQUE' : '');
+    el.appendChild(d);
+  });
+  if (b.sounds.length){
+    const t = document.createElement('div');
+    t.style.marginTop = '6px';
+    t.textContent = `total ${b.build.bytes} octets`;
+    el.appendChild(t);
+  }
+  (b.build.warnings || []).forEach(w => {
+    const d = document.createElement('div'); d.style.color = '#e8a33d'; d.textContent = '⚠ ' + w;
+    el.appendChild(d);
+  });
+}
+
+$('roll').onclick = roll;
+$('mutate').onclick = mutate;
+$('amount').oninput = () => { $('vAmt').textContent = $('amount').value; };
+$('noise_on').onchange = e => { CUR.noise_on = e.target.checked; render(); };
+$('kit').onchange = () => {
+  CUR.noise_kit = [...document.querySelectorAll('[data-kit]')]
+    .filter(c => c.checked).map(c => c.dataset.kit);
+  render();
+};
+$('keep').onclick = async () => {
+  await post('/api/bank/add', {name: name_(), category: CAT, params: CUR,
+                               channel: $('sndChannel').value === '' ? null : chan(),
+                               priority: 1});
+  await refreshBank();
+};
+$('bankChannel').onchange = $('bankName').onchange = async () => {
+  await post('/api/bank/settings', {name: $('bankName').value,
+                                    default_channel: +$('bankChannel').value});
+  await refreshBank();
+};
+document.addEventListener('keydown', e => {
+  if (mode === 'create' && e.code === 'Space' && e.target.tagName !== 'INPUT'){
+    e.preventDefault(); render();
+  }
+});
+
+initCreate();
+
 // ---------- lecture ----------
 $('playOut').onclick = ()=>{ audioSrc.pause(); audioOut.loop=$('loop').checked;
   audioOut.currentTime=0; audioOut.play(); };
@@ -623,7 +781,6 @@ $('copy').onclick = async ()=>{ await navigator.clipboard.writeText($('asm').val
   $('copied').textContent='copié'; setTimeout(()=>$('copied').textContent='',1500); };
 
 // ---------- reactivite ----------
-$('preset').onchange = e => { applyPreset(e.target.value); generate(); };
 $('instrument_mode').onchange = e => {
   $('swWrap').classList.toggle('hide', e.target.value!=='interleave');
   $('instWrap').classList.toggle('hide', e.target.value!=='fixed');
@@ -637,8 +794,7 @@ $('tuning_mode').onchange = e => {
 let t = null;
 const debounced = ()=>{ syncLabels(); if(!$('live').checked) return;
   clearTimeout(t); t = setTimeout(generate, 220); };
-for (const id of ['duration_ms','f_start','f_end','pitch_curve','vol_start','vol_end','jitter_cents',
-                  'vibrato_hz','vibrato_cents','instrument','switch_penalty','smooth','pitch_shift',
+for (const id of ['instrument','switch_penalty','smooth','pitch_shift',
                   'gain_db','trim','channel','priority','name','custom_seed',
                   'melodic_min_frames','melodic_retrigger','melodic_onset_db',
                   'melodic_tuning','melodic_scale',
