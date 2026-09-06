@@ -8,9 +8,11 @@ mesuree sur l'emulateur : 0,27 et 0,12, contre 0,00 pour une note melodique.
 
 Adressage : le driver ecrit les registres <= $0F tels quels et AJOUTE le numero
 de voie aux autres. Les registres des voies rythmiques etant au-dessus de $0F,
-il faut emettre `reg - voie` pour que la puce recoive `reg`. A partir de la
-voie 7, $16 - 7 = $0F retomberait dans la plage ecrite verbatim et viserait le
-registre de controle du rythme : la couche est alors refusee.
+il faut emettre `reg - voie` pour que la puce recoive `reg`.
+
+La couche bruit est refusee au-dela de la voie 5 : les voies 6, 7 et 8 sont
+requisitionnees par le mode rythme lui-meme, une couche melodique posee dessus
+serait effacee. Voir MAX_CHANNEL ci-dessous pour le detail des deux contraintes.
 """
 
 from __future__ import annotations
@@ -29,9 +31,17 @@ HITS: dict[str, int] = {
 }
 KIT_ORDER: tuple[str, ...] = ("BD", "SD", "TOM", "CYM", "HH")
 
-# Voie maximale utilisable avec la couche bruit : au-dela, la
-# pre-soustraction retombe sous $0F. Voir l'en-tete du module.
-MAX_CHANNEL = 6
+# Voie maximale utilisable avec la couche bruit. Deux contraintes se
+# superposent, et ce n'est pas la plus evidente qui lie :
+#
+# - l'adressage : au-dela de la voie 6, $16 - voie retombe sous $0F et serait
+#   ecrit verbatim par le driver, visant le mauvais registre ;
+# - le materiel : le mode rythme requisitionne les voies 6, 7 et 8. Une couche
+#   melodique sur l'une d'elles n'est pas approximative, elle est EFFACEE.
+#
+# Mesure sur emulateur (note tenue, RMS sur 250 ms) : voies 0 a 5 identiques
+# avec et sans rythme, voie 6 a zero. C'est donc 5, pas 6.
+MAX_CHANNEL = 5
 
 # Hauteurs de la grosse caisse et du tom : 16 crans, du plus grave au plus
 # aigu. Les percussions rythmiques prennent leur hauteur dans les registres
@@ -44,9 +54,9 @@ def check_channel(channel: int) -> None:
     """Leve ValueError si la couche bruit ne peut pas viser juste sur cette voie."""
     if not 0 <= channel <= MAX_CHANNEL:
         raise ValueError(
-            f"couche bruit impossible sur la voie {channel} : les registres de "
-            f"la section rythme recoivent le numero de voie, et au-dela de la "
-            f"voie {MAX_CHANNEL} la compensation retombe sous $0F. "
+            f"couche bruit impossible sur la voie {channel} : le mode rythme "
+            f"requisitionne les voies 6, 7 et 8 pour les percussions, et une "
+            f"couche melodique posee dessus serait effacee, pas degradee. "
             f"Choisir une voie de 0 a {MAX_CHANNEL}, ou couper la couche bruit."
         )
 

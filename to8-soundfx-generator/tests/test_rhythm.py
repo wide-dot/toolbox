@@ -38,18 +38,44 @@ def test_rhythm_control_register_is_never_shifted():
     print("  $0E passe verbatim depuis toutes les voies")
 
 
-def test_channels_above_six_are_refused():
-    """A partir de la voie 7, $16 - 7 = $0F retombe dans la plage ecrite
-    verbatim et viserait le registre de controle du rythme."""
-    for channel in (7, 8):
+def test_channels_taken_by_rhythm_mode_are_refused():
+    """Les voies 6, 7 et 8 sont requisitionnees par le mode rythme lui-meme :
+    une couche melodique dessus serait effacee, pas simplement mal adressee."""
+    for channel in (6, 7, 8):
         try:
             rhythm.check_channel(channel)
         except ValueError:
             continue
         raise AssertionError(f"voie {channel} acceptee alors qu'elle est hors plage")
-    for channel in range(0, 7):
+    for channel in range(0, 6):
         rhythm.check_channel(channel)  # ne doit pas lever
-    print("  voies 7 et 8 refusees, 0 a 6 acceptees")
+    print("  voies 6 a 8 refusees, 0 a 5 acceptees")
+
+
+def test_rhythm_mode_erases_the_melodic_voices_it_takes():
+    """La limite de MAX_CHANNEL est materielle, pas seulement d'adressage.
+
+    Le mode rythme requisitionne les voies 6, 7 et 8. Une note melodique posee
+    sur l'une d'elles n'est pas degradee : elle disparait. C'est ce qui fixe la
+    limite a 5 et non a 6, et cette mesure est la seule justification de la
+    constante.
+    """
+    def rms(channel, with_rhythm):
+        ev = [(0, 0x30 + channel, 0xF0), (0, 0x10 + channel, 0x2A),
+              (0, 0x20 + channel, 0x1A)]
+        if with_rhythm:
+            ev += [(0, r, v) for r, v in rhythm.arm_writes(4, 4)]
+            ev.append((0, opll.REG_RHYTHM, rhythm.RHYTHM_ON))
+        y = opll.render(ev, int(0.5 * RATE), RATE)
+        return float(np.sqrt(np.mean(y[int(0.15 * RATE):int(0.40 * RATE)] ** 2)))
+
+    for channel in range(0, rhythm.MAX_CHANNEL + 1):
+        assert rms(channel, True) > rms(channel, False) * 0.5, (
+            f"voie {channel} autorisee mais effacee par le mode rythme")
+    for channel in (6, 7, 8):
+        assert rms(channel, True) < rms(channel, False) * 0.1, (
+            f"voie {channel} survit au mode rythme : la limite est trop stricte")
+    print(f"  voies 0 a {rhythm.MAX_CHANNEL} preservees, 6 a 8 effacees")
 
 
 def test_encode_refuses_a_rhythm_register_on_an_out_of_range_channel():
