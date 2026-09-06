@@ -32,6 +32,28 @@ def test_envelope_rises_then_falls():
     print(f"  enveloppe : {vols}")
 
 
+def test_envelope_is_correct_when_a_phase_lasts_one_frame():
+    """Une phase d'une seule trame doit quand meme atteindre sa cible.
+
+    C'est le cas PAR DEFAUT du dataclass (attack_frames=1) et la borne basse de
+    decay_frames. Une rampe qui ne porte que son point de depart laissait la
+    trame d'attaque en silence complet, puis sautait au pic : le son ne
+    demarrait qu'a la trame suivante.
+    """
+    p = design.SfxParams(attack_frames=1, hold_frames=2, decay_frames=4,
+                         vol_peak=0, vol_end=15)
+    frames, _ = design.render(p)
+    vols = [f.volume for f in frames]
+    assert vols[0] == 0, f"l'attaque d'une trame n'atteint pas le pic : {vols}"
+    assert vols[-1] == 15, f"la chute n'atteint pas vol_end : {vols}"
+
+    court = design.SfxParams(attack_frames=0, hold_frames=0, decay_frames=1,
+                             vol_peak=0, vol_end=15)
+    frames, _ = design.render(court)
+    assert [f.volume for f in frames] == [15], [f.volume for f in frames]
+    print(f"  attaque d'une trame : {vols}")
+
+
 def test_slide_delta_bends_the_glide():
     """L'inflexion est ce qui donne le glissement qui ralentit. Sans elle, une
     droite ; avec, une courbe."""
