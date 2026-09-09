@@ -202,8 +202,13 @@ de 255 commandes, pas un défaut à corriger.
 7. `roll` rend toujours `pitch_draw == ()`.
 8. Aller-retour JSON de la banque : un son gardé avec un dessin le retrouve
    identique après `to_json`/rechargement.
-9. `base_pitch` ignore vibrato, jitter **et** la correction dessinée :
-    deux sons dont seul `pitch_draw` diffère ont la même `freq_base`.
+9. `base_pitch` ignore vibrato, jitter **et** la correction dessinée. Deux
+    assertions distinctes, et la seconde doit pouvoir échouer : deux sons dont
+    seul `pitch_draw` diffère ont la même `freq_base` ; et le **même** son
+    modulations coupées a la même `freq_base` que modulations actives. Comparer
+    deux sons qui portent tous deux les mêmes modulations ne prouve rien — le
+    terme se simplifie des deux côtés de l'égalité, et une régression qui ferait
+    entrer le jitter dans `base_pitch` passerait au vert.
 10. `freq_base` a la même longueur que `curves.freq`, y compris sur un son
     tronqué par le budget.
 
