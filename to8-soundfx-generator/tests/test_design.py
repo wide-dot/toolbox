@@ -10,6 +10,10 @@ def _midis(frames):
             for f in frames if f.voiced]
 
 
+def _freqs(frames):
+    return [opll.fnum_block_to_freq(f.fnum, f.block) for f in frames if f.voiced]
+
+
 def test_duration_is_the_envelope():
     """La duree n'est pas un reglage : elle vaut attaque + tenue + chute. En
     faire un parametre independant permettrait de la mettre en contradiction
@@ -290,6 +294,59 @@ def test_drawn_layer_is_clamped_and_cleaned_on_the_way_in():
         {"pitch_draw": [9000.0, -9000.0, "x", None, 100.0]})
     assert p.pitch_draw == (2400.0, -2400.0, 100.0), p.pitch_draw
     print(f"  {p.pitch_draw}")
+
+
+def test_drawn_layer_shifts_the_pitch_in_cents():
+    """+1200 cents dessines sur toute la duree, c'est une octave : le double.
+
+    Modulations coupees, sinon le jitter brouille la mesure.
+    """
+    p = design.SfxParams(slide=0.0, slide_delta=0.0,
+                         vibrato_cents=0.0, jitter_cents=0.0)
+    nu = _freqs(design.render(p)[0])
+    p2 = design.SfxParams.from_dict(
+        {**p.to_dict(), "pitch_draw": [1200.0] * p.duration_frames})
+    dessine = _freqs(design.render(p2)[0])
+    assert len(nu) == len(dessine) and nu
+    for a, b in zip(nu, dessine):
+        assert abs(b / a - 2.0) < 0.02, f"{a:.1f} Hz -> {b:.1f} Hz"
+    print(f"  {nu[0]:.0f} Hz -> {dessine[0]:.0f} Hz")
+
+
+def test_drawn_layer_composes_with_the_slide():
+    """Le dessin s'AJOUTE au glissement, il ne le remplace pas.
+
+    C'est tout l'interet du choix « correction relative » : les curseurs
+    continuent de porter la forme d'ensemble sous les retouches.
+    """
+    base = design.SfxParams(slide=-1.0, slide_delta=0.0, vibrato_cents=0.0,
+                            jitter_cents=0.0, attack_frames=1, hold_frames=0,
+                            decay_frames=9)
+    n = base.duration_frames
+    p = design.SfxParams.from_dict(
+        {**base.to_dict(), "pitch_draw": [0.0] * (n - 1) + [1200.0]})
+    sans = _midis(design.render(base)[0])
+    avec = _midis(design.render(p)[0])
+    assert avec[:-1] == sans[:-1], f"trames non dessinees deplacees\n{sans}\n{avec}"
+    assert avec[-1] - sans[-1] == 12, f"{sans[-1]} -> {avec[-1]}, attendu +12"
+    print(f"  glissement conserve, derniere trame {sans[-1]} -> {avec[-1]}")
+
+
+def test_base_pitch_ignores_modulations_and_the_drawing():
+    """base_pitch est la reference contre laquelle pitch_draw est un ecart.
+
+    Si elle suivait le dessin, l'interface mesurerait le geste contre une
+    courbe qui a deja bouge, et le deplacement serait double a chaque passage.
+    Si elle suivait le jitter, celui-ci se figerait dans la couche dessinee.
+    """
+    p = design.SfxParams(vibrato_hz=6.0, vibrato_cents=200.0,
+                         jitter_cents=300.0, seed=7)
+    nu = design.base_pitch(p)
+    p2 = design.SfxParams.from_dict(
+        {**p.to_dict(), "pitch_draw": [900.0] * p.duration_frames})
+    assert design.base_pitch(p2) == nu, "base_pitch a suivi le dessin"
+    assert len(nu) == p.duration_frames, f"{len(nu)} vs {p.duration_frames}"
+    print(f"  {len(nu)} trames, {nu[0]:.0f} Hz -> {nu[-1]:.0f} Hz")
 
 
 if __name__ == "__main__":

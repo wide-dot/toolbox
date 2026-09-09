@@ -221,17 +221,20 @@ def _envelope(p: SfxParams, n: int) -> np.ndarray:
     return np.clip(np.round(vol), 0, 15).astype(int)
 
 
-def render(p: SfxParams) -> tuple[list[Frame], list[int] | None]:
-    """Parametres -> trames du driver, et piste de bruit (None si eteinte)."""
-    n = p.duration_frames
-    rng = np.random.default_rng(p.seed)
-
-    # Indice local : la repetition relance le motif entier.
+def _local_index(p: SfxParams, n: int) -> np.ndarray:
+    """Indice de trame, remis a zero a chaque repetition du motif."""
     if p.repeat_frames and p.repeat_frames > 0:
-        local = np.arange(n) % p.repeat_frames
-    else:
-        local = np.arange(n)
+        return np.arange(n) % p.repeat_frames
+    return np.arange(n)
 
+
+def _pitch_semitones(p: SfxParams, n: int, local: np.ndarray):
+    """Hauteur parametrique en demi-tons, et les re-attaques posees par l'arpege.
+
+    SANS la couche dessinee, sans vibrato ni jitter : c'est la courbe de
+    reference contre laquelle pitch_draw est un ecart. render() lui ajoute le
+    dessin ; base_pitch() la rend telle quelle a l'interface.
+    """
     # Hauteur en demi-tons : depart + glissement + inflexion. L'inflexion est
     # la derivee seconde ; c'est elle qui donne le glissement qui ralentit.
     midi0 = freq_to_midi(max(p.f_start, 1.0))
@@ -248,6 +251,26 @@ def render(p: SfxParams) -> tuple[list[Frame], list[int] | None]:
             changed = np.ones(n, dtype=bool)
             changed[1:] = step_idx[1:] != step_idx[:-1]
             attack_flags |= changed
+    return midi, attack_flags
+
+
+def render(p: SfxParams) -> tuple[list[Frame], list[int] | None]:
+    """Parametres -> trames du driver, et piste de bruit (None si eteinte)."""
+    n = p.duration_frames
+    rng = np.random.default_rng(p.seed)
+
+    # Indice local : la repetition relance le motif entier.
+    local = _local_index(p, n)
+    midi, attack_flags = _pitch_semitones(p, n, local)
+
+    # La correction dessinee s'ajoute ICI : apres l'arpege, avant la conversion
+    # en hertz. Le vibrato et le jitter s'appliquent ensuite, donc ils restent
+    # PAR-DESSUS — ce sont des modulations, pas la hauteur elle-meme. Une
+    # retouche deplace la note ; le vibrato continue de la faire osciller
+    # autour de sa nouvelle position.
+    if p.pitch_draw:
+        midi = midi + _resample_draw(p.pitch_draw, n) / 100.0
+
     if p.repeat_frames and p.repeat_frames > 0:
         attack_flags |= (local == 0)
 
@@ -278,6 +301,21 @@ def render(p: SfxParams) -> tuple[list[Frame], list[int] | None]:
                             timbres[i], bool(attack_flags[i])))
 
     return frames, _noise_track(p, n)
+
+
+def base_pitch(p: SfxParams) -> list[float]:
+    """Courbe parametrique nue, en Hz : sans vibrato, sans jitter, sans dessin.
+
+    C'est la reference que l'interface utilise pour convertir la position du
+    curseur en un ecart de cents. La prendre sur la courbe finale figerait le
+    jitter de la trame dans la couche dessinee, et l'erreur s'accumulerait a
+    chaque passage ; l'y inclure elle-meme doublerait chaque deplacement.
+    Elle n'est jamais tracee.
+    """
+    n = p.duration_frames
+    midi, _ = _pitch_semitones(p, n, _local_index(p, n))
+    return [round(float(np.clip(midi_to_freq(float(m)), 20.0, 8000.0)), 2)
+            for m in midi]
 
 
 def _noise_track(p: SfxParams, n: int) -> list[int] | None:
