@@ -484,19 +484,30 @@ Run: `cd toolbox/to8-soundfx-generator && python3 -m tests`
 
 Expected: les trois tests en `OK` du premier coup — ils décrivent un comportement déjà acquis. Aucune ligne `FAIL`.
 
-- [ ] **Step 4: Éprouver le test de mutation**
+- [ ] **Step 4: Éprouver les trois tests, un sabotage chacun**
 
-Un test qui passe du premier coup n'a rien prouvé tant qu'on ne l'a pas vu échouer. Ajouter temporairement `"pitch_draw": (0.0, 0.0)` à `BOUNDS` dans `design.py` :
+Un test qui passe du premier coup n'a rien prouvé tant qu'on ne l'a pas vu échouer. Trois tests, donc **trois sabotages**, chacun choisi pour que le test tombe sur **sa propre assertion**.
 
-```python
-    "noise_vol": (0, 15),
-    "pitch_draw": (0.0, 0.0),      # TEMPORAIRE — a retirer
-}
+Deux pièges rendent un sabotage unique inopérant, et il faut les contourner :
+
+- **L'ordre et l'abandon.** Le lanceur appelle les fonctions d'un module dans l'ordre **trié par nom**, et il ne rattrape que les `AssertionError` : toute autre exception fait mourir la suite entière, modules suivants compris. Un sabotage qui plante tôt masque tous les tests qui viennent après — et `tests/test_bank.py` est importé après `tests/test_design.py`, donc il ne tourne jamais.
+- **Le plantage qui masque l'assertion.** Un sabotage qui change le *type* de `pitch_draw` (l'ajouter à `BOUNDS` le transforme en flottant) fait lever un `TypeError` dans `to_dict`, pas une `AssertionError`. Le test ne tombe alors pas sur son assertion : il ne prouve rien.
+
+**Donc : exécuter chaque test sabordé en l'appelant directement**, pour contourner l'ordre et l'abandon :
+
+```sh
+python3 -c "import tests.test_design as t; t.test_mutation_never_touches_the_drawing()"
 ```
 
-Run: `cd toolbox/to8-soundfx-generator && python3 -m tests 2>&1 | tail -20`
+| Test | Sabotage | Ce qui doit sortir |
+|---|---|---|
+| `test_a_roll_starts_from_a_blank_page` | ajouter `"pitch_draw": (0.0, 0.0)` à `BOUNDS` | `AssertionError` sur son message `f"{cat}/{seed} : {p.pitch_draw}"` |
+| `test_mutation_never_touches_the_drawing` | dans `mutate`, perturber `out.pitch_draw` **en gardant un tuple de flottants** (sinon un `TypeError` masque l'assertion) | `AssertionError` sur `f"mutation {k} : {p.pitch_draw}"` |
+| `test_the_drawing_survives_the_json_round_trip` | dans `Bank.to_json`, retirer la clé du dictionnaire de paramètres émis | `AssertionError` sur le `pitch_draw` revenu |
 
-Expected: la suite casse. **Copier la sortie exacte dans le rapport de tâche.** Puis retirer la ligne et relancer `python3 -m tests` pour confirmer le retour au vert.
+**Copier les trois sorties exactes dans le rapport de tâche.** Après chaque sabotage, le retirer. Puis relancer `python3 -m tests` pour confirmer le retour au vert et l'absence de résidu (`git diff`, `git status`).
+
+Si un sabotage ne fait **pas** tomber son test, le dire et rapporter `DONE_WITH_CONCERNS` : le test est creux et doit être repensé.
 
 - [ ] **Step 5: Commit**
 
@@ -511,7 +522,9 @@ rien ne les signale a la lecture, et le jour ou quelqu'un ajoutera
 pitch_draw a BOUNDS pour lui donner un curseur, elles tomberont ensemble
 et sans un mot.
 
-Eprouve : pitch_draw ajoute a BOUNDS fait bien tomber le test de mutation."
+Eprouve : un sabotage par test, chacun execute en appelant la fonction
+directement pour contourner l'ordre trie et l'abandon de la suite. Les
+trois tombent sur leur propre assertion."
 ```
 
 ---
