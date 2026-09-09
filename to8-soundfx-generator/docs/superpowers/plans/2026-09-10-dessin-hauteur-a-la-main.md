@@ -511,7 +511,10 @@ Eprouve : pitch_draw ajoute a BOUNDS fait bien tomber le test de mutation."
 
 **Interfaces:**
 - Consumes: `design.base_pitch` (tâche 2).
-- Produces: `_render_design(...)["curves"]["freq_base"]` — `list[float]` en Hz, **de la même longueur que `curves["freq"]`**. C'est sur cette clé que la tâche 5 s'appuie.
+- Produces:
+  - `_render_design(...)["curves"]["freq_base"]` — `list[float]` en Hz, **de la même longueur que `curves["freq"]`**
+  - `/api/design/init` → `"pitch_draw_max_cents"` : `float`, la borne de la couche dessinée
+  - La tâche 5 s'appuie sur les deux.
 
 - [ ] **Step 1: Écrire les deux tests qui échouent**
 
@@ -571,13 +574,23 @@ Dans `to8sfx/server.py`, dans le dictionnaire `"curves"` retourné par `_render_
             "freq_base": design.base_pitch(p)[:len(used)],
 ```
 
-- [ ] **Step 4: Lancer la suite**
+- [ ] **Step 4: Exposer la borne de la couche dessinée à l'interface**
+
+`/api/design/init` sert déjà les constantes que le navigateur doit connaître (`bounds`, `int_params`, `max_noise_channel`). La borne de la couche dessinée en fait partie : sans elle, la tâche 5 devrait réécrire `2400` en dur côté JS, et le jour où la constante Python bougerait, le navigateur laisserait dessiner ce que le serveur ramènerait ensuite en silence.
+
+Dans `to8sfx/server.py`, dans le dictionnaire de `/api/design/init`, après la ligne `"max_noise_channel": rhythm.MAX_CHANNEL,` :
+
+```python
+                "pitch_draw_max_cents": design.PITCH_DRAW_MAX_CENTS,
+```
+
+- [ ] **Step 5: Lancer la suite**
 
 Run: `cd toolbox/to8-soundfx-generator && python3 -m tests`
 
 Expected: les deux nouveaux tests en `OK`, aucune régression. `test_render_design_returns_everything_the_ui_needs` doit toujours passer.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add to8sfx/server.py tests/test_server_design.py
@@ -681,10 +694,14 @@ function drawAt(ev){
   if (i >= BASE.length || !(BASE[i] > 0)) return;
   const f = Math.max(20, Math.min(8000, freqAt(pos.y)));
   ensureDraw(GEO.n);
+  // Borne servie par /api/design/init : une seule source pour les deux cotes
+  // de la frontiere. INIT est forcement charge ici — sans lui il n'y a eu
+  // aucun rendu, donc ni GEO ni BASE, et les gardes ci-dessus ont deja rendu.
+  const lim = INIT.pitch_draw_max_cents;
   // pitch_draw est un ecart contre la courbe NUE, donc une affectation
   // directe : le geste est idempotent, retirer deux fois la meme bande au
   // meme endroit donne la meme valeur, sans derive.
-  CUR.pitch_draw[i] = Math.max(-2400, Math.min(2400,
+  CUR.pitch_draw[i] = Math.max(-lim, Math.min(lim,
     1200 * Math.log2(f / BASE[i])));
   // Par construction la trame vaut exactement f : rien d'autre a calculer
   // pour le trace provisoire. Elle perd son jitter jusqu'au rendu suivant.
@@ -738,6 +755,14 @@ Le canvas est partagé par les deux onglets, mais `CUR` n'existe qu'en mode Cré
 $('tabCreate').onclick = ()=>{ mode='create'; $('wavOnly').classList.add('hide');
   $('drawBox').classList.remove('hide');
 ```
+
+Et, à la **fin** du corps de ce même gestionnaire (après `$('waveWrap').classList.add('hide');`) :
+
+```javascript
+  if (CUR) render();
+```
+
+Sans ce rendu, le geste serait mort au retour de l'onglet Fichier audio : `paint()` est partagée par les deux modes, et une génération en mode fichier écrase `BASE` par un tableau vide — sa réponse ne porte pas de `freq_base`. Le garde `!BASE.length` ferait alors échouer le geste en silence jusqu'à ce qu'un curseur bouge. C'est la symétrie de ce que `$('tabWav').onclick` fait déjà avec `generate()` quand une source est chargée.
 
 ```javascript
 $('tabWav').onclick = ()=>{ mode='wav'; $('wavOnly').classList.remove('hide');
