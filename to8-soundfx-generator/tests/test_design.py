@@ -338,10 +338,20 @@ def test_base_pitch_ignores_modulations_and_the_drawing():
     Si elle suivait le dessin, l'interface mesurerait le geste contre une
     courbe qui a deja bouge, et le deplacement serait double a chaque passage.
     Si elle suivait le jitter, celui-ci se figerait dans la couche dessinee.
+
+    Le meme son, prive de vibrato et de jitter, doit rendre EXACTEMENT la
+    meme courbe : sinon base_pitch en tenait compte, ce que le seul essai
+    contre pitch_draw ne peut pas voir puisque vibrato/jitter/seed sont
+    identiques des deux cotes de cette comparaison-la.
     """
     p = design.SfxParams(vibrato_hz=6.0, vibrato_cents=200.0,
                          jitter_cents=300.0, seed=7)
     nu = design.base_pitch(p)
+    sans_modulations = design.SfxParams.from_dict(
+        {**p.to_dict(), "vibrato_hz": 0.0, "vibrato_cents": 0.0,
+         "jitter_cents": 0.0})
+    assert design.base_pitch(sans_modulations) == nu, \
+        "base_pitch a suivi le vibrato ou le jitter"
     p2 = design.SfxParams.from_dict(
         {**p.to_dict(), "pitch_draw": [900.0] * p.duration_frames})
     assert design.base_pitch(p2) == nu, "base_pitch a suivi le dessin"

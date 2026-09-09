@@ -228,7 +228,7 @@ def _local_index(p: SfxParams, n: int) -> np.ndarray:
     return np.arange(n)
 
 
-def _pitch_semitones(p: SfxParams, n: int, local: np.ndarray):
+def _pitch_semitones(p: SfxParams, n: int, local: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Hauteur parametrique en demi-tons, et les re-attaques posees par l'arpege.
 
     SANS la couche dessinee, sans vibrato ni jitter : c'est la courbe de
