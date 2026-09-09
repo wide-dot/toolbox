@@ -151,6 +151,22 @@ def test_noise_sound_carries_its_warning_in_the_asm():
     print("  avertissement de couche bruit present dans le bloc genere")
 
 
+def test_the_drawing_survives_the_json_round_trip():
+    """Un son garde avec un dessin doit le retrouver identique au rechargement.
+
+    Sans ca, la banque perdrait silencieusement la moitie du travail : le
+    parametrique reviendrait, les retouches non.
+    """
+    p = design.randomize("explosion", seed=8)
+    p.pitch_draw = (0.0, 240.5, -1100.0, 12.25)
+    b = bank.Bank(name="essai", default_channel=4)
+    b.sounds.append(bank.BankSound(name="Boum", params=p,
+                                   category="explosion", priority=1))
+    revenu = bank.Bank.from_json(b.to_json()).sounds[0].params
+    assert revenu.pitch_draw == p.pitch_draw, revenu.pitch_draw
+    print(f"  {len(p.pitch_draw)} valeurs conservees : {revenu.pitch_draw}")
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

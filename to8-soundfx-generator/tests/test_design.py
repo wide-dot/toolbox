@@ -359,6 +359,35 @@ def test_base_pitch_ignores_modulations_and_the_drawing():
     print(f"  {len(nu)} trames, {nu[0]:.0f} Hz -> {nu[-1]:.0f} Hz")
 
 
+def test_mutation_never_touches_the_drawing():
+    """Muter cherche AUTOUR du son courant : les retouches restent en place.
+
+    Gratuit par construction — mutate recopie par from_dict(to_dict()) puis ne
+    perturbe que les cles de BOUNDS, plus arp_steps et inst_steps nommement.
+    Ce test est la pour que ca le reste.
+    """
+    p = design.randomize("tir", seed=3)
+    p.pitch_draw = (0.0, 350.0, -120.0, 40.0)
+    attendu = p.pitch_draw
+    for k in range(20):
+        p = design.mutate(p, amount=0.9, locked=(), seed=100 + k)
+        assert p.pitch_draw == attendu, f"mutation {k} : {p.pitch_draw}"
+    print("  20 mutations enchainees a 90 % : dessin intact")
+
+
+def test_a_roll_starts_from_a_blank_page():
+    """Tirer au sort, c'est un son NEUF : la main repart de zero.
+
+    Gratuit aussi — randomize construit un SfxParams neuf en bouclant sur
+    BOUNDS, ou pitch_draw n'est pas.
+    """
+    for cat in design.CATEGORIES:
+        for seed in (0, 1, 999):
+            p = design.randomize(cat, seed=seed)
+            assert p.pitch_draw == (), f"{cat}/{seed} : {p.pitch_draw}"
+    print(f"  {len(design.CATEGORIES)} categories x 3 graines : dessin vide")
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
