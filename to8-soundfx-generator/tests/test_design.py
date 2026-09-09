@@ -259,6 +259,39 @@ def test_every_category_fits_the_budget_at_its_worst_corner():
         print(f"    {nom:12s} pire coin : {len(cmds):3d} commandes")
 
 
+def test_drawn_layer_is_untouched_when_lengths_match():
+    """Longueur egale = identite. C'est le cas courant, tant que la duree ne
+    bouge pas, et le geste doit y etre rendu au cent pres, sans lissage."""
+    dessin = [0.0, 150.0, -300.0, 25.0]
+    out = list(design._resample_draw(dessin, 4))
+    assert out == dessin, f"{out} != {dessin}"
+    print(f"  identite sur {len(dessin)} trames")
+
+
+def test_drawn_layer_stretches_in_proportion():
+    """Une correction posee au tiers du son reste au tiers apres allongement.
+
+    C'est le comportement choisi : le dessin s'etire avec le son, comme
+    l'enveloppe le fait deja sous le curseur de duree totale.
+    """
+    dessin = [0.0] * 9
+    dessin[3] = 600.0                      # 3/8 du parcours, sur 9 valeurs
+    out = list(design._resample_draw(dessin, 33))
+    pic = out.index(max(out))
+    assert abs(pic / 32 - 3 / 8) < 0.05, f"pic a {pic}/32, attendu vers 0.375"
+    print(f"  pic 3/8 -> {pic}/32")
+
+
+def test_drawn_layer_is_clamped_and_cleaned_on_the_way_in():
+    """Une valeur hors bornes venue d'un JSON edite a la main est RAMENEE, pas
+    refusee : la banque d'un utilisateur ne doit pas devenir illisible pour un
+    cent de trop. Ce qui n'est pas un nombre est simplement ecarte."""
+    p = design.SfxParams.from_dict(
+        {"pitch_draw": [9000.0, -9000.0, "x", None, 100.0]})
+    assert p.pitch_draw == (2400.0, -2400.0, 100.0), p.pitch_draw
+    print(f"  {p.pitch_draw}")
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

@@ -52,6 +52,16 @@ class SfxParams:
     vibrato_cents: float = 0.0
     jitter_cents: float = 0.0
 
+    # --- correction dessinee a la main ---
+    # Un ecart en cents par trame, ajoute a la hauteur parametrique. Range
+    # HORS de BOUNDS, comme arp_steps : ce n'est pas un scalaire. C'est ce
+    # placement qui donne tout le cycle de vie sans une ligne de plus —
+    # randomize() boucle sur BOUNDS donc un tirage repart de (), mutate()
+    # recopie puis ne touche que BOUNDS donc le dessin survit, et
+    # buildSliders() itere sur BOUNDS donc aucun curseur n'est genere.
+    # La longueur est libre : render() la ramene a la duree courante.
+    pitch_draw: tuple[float, ...] = ()
+
     # --- arpege ---
     arp_steps: tuple[int, ...] = ()
     arp_frames: int = 0        # 0 = arpege eteint
@@ -88,6 +98,7 @@ class SfxParams:
         d["arp_steps"] = list(self.arp_steps)
         d["noise_kit"] = list(self.noise_kit)
         d["inst_steps"] = list(self.inst_steps)
+        d["pitch_draw"] = list(self.pitch_draw)
         return d
 
     @staticmethod
@@ -100,6 +111,8 @@ class SfxParams:
             out["noise_kit"] = tuple(str(v) for v in out["noise_kit"])
         if "inst_steps" in out:
             out["inst_steps"] = tuple(int(v) for v in out["inst_steps"])
+        if "pitch_draw" in out:
+            out["pitch_draw"] = _clean_draw(out["pitch_draw"])
         return SfxParams(**out)
 
 
@@ -138,6 +151,51 @@ INT_PARAMS = {"attack_frames", "hold_frames", "decay_frames", "vol_peak",
 # un arpege de bruitage, et sans borne une chaine de mutations fait deriver les
 # marches indefiniment — l'utilisateur en enchaine par dizaines.
 ARP_STEP_MIN, ARP_STEP_MAX = -24, 24
+
+# La couche dessinee a la main est bornee comme l'arpege l'est, et pour la
+# meme raison : sans borne, une valeur aberrante venue d'un JSON edite a la
+# main enverrait la hauteur hors du domaine de la puce. Deux octaves de part
+# et d'autre couvrent largement une correction de bruitage.
+PITCH_DRAW_MAX_CENTS = 2400.0
+
+
+def _clean_draw(values) -> tuple[float, ...]:
+    """Rend une couche dessinee saine : que des nombres finis, tous bornes.
+
+    Une valeur hors bornes est RAMENEE, pas refusee : la banque d'un
+    utilisateur ne doit pas devenir illisible pour un cent de trop.
+    """
+    out = []
+    for v in values or ():
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            continue
+        if f != f or f in (float("inf"), float("-inf")):
+            continue
+        out.append(max(-PITCH_DRAW_MAX_CENTS, min(PITCH_DRAW_MAX_CENTS, f)))
+    return tuple(out)
+
+
+def _resample_draw(values, n: int) -> np.ndarray:
+    """Etire la couche dessinee sur n trames. Le resultat est en cents.
+
+    Longueur egale : l'identite, au cent pres. C'est le cas courant tant que
+    la duree ne bouge pas, et le geste doit y etre rendu tel qu'il a ete fait.
+    Longueur differente : interpolation lineaire sur un axe normalise [0, 1],
+    pour que la forme dessinee garde sa place relative dans le son.
+    """
+    if n <= 0:
+        return np.zeros(0)
+    L = len(values)
+    if L == 0:
+        return np.zeros(n)
+    src = np.asarray(values, dtype=float)
+    if L == n:
+        return src
+    if L == 1:
+        return np.full(n, src[0])
+    return np.interp(np.linspace(0.0, 1.0, n), np.linspace(0.0, 1.0, L), src)
 
 
 def _envelope(p: SfxParams, n: int) -> np.ndarray:
