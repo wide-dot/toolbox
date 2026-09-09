@@ -17,3 +17,6 @@ buildNumber.properties
 ._*
 .Spotlight-V100
 .Trashes
+
+# espace de travail des chantiers pilotes (registre, briefs, paquets de relecture)
+.superpowers/
