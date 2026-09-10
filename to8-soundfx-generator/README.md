@@ -80,6 +80,14 @@ Deux onglets — **Créer** et **Fichier audio**.
   forme d'historique de l'outil, il n'y a pas de pile de tirages rechargeable.
 - **Affiner.** Les curseurs des trois couches (enveloppe et glissement pour le
   ton, marches pour l'arpège, activation et kit pour le bruit) en accès direct.
+- **Dessiner la hauteur.** Les bandes verticales du tracé de hauteur sont les
+  cibles du geste : cliquer-glisser sur l'une d'elles y fixe la hauteur voulue
+  pour cette trame précise. La retouche s'ajoute **par-dessus** les réglages
+  paramétriques — un écart, pas un remplacement — donc les curseurs de
+  glissement et d'inflexion continuent d'agir en dessous, et une correction
+  survit à leurs changements ultérieurs. Un tirage au sort repart d'un dessin
+  vierge, une mutation le conserve intact. Le bouton **Effacer le dessin**
+  l'efface d'un coup, sans toucher au reste des réglages.
 - **Banque.** Nom du son, voie YM2413 (vide = voie par défaut de la banque),
   bouton **Garder dans la banque** ; la liste en dessous affiche pour chaque
   son gardé sa voie, son nombre de commandes, ses octets et un avertissement
@@ -319,7 +327,7 @@ niveau. L'option est donc **désactivée par défaut**, et l'interface le rappel
 
 ## Validation
 
-`python3 -m tests` (60 tests, dans `tests/test_opll.py`, `test_analyze.py`,
+`python3 -m tests` (77 tests, dans `tests/test_opll.py`, `test_analyze.py`,
 `test_melody.py`, `test_design.py`, `test_rhythm.py`, `test_codegen_noise.py`,
 `test_bank.py` et `test_server_design.py`) vérifie, contre l'émulateur, entre
 autres :
