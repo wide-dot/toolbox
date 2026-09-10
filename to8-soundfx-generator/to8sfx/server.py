@@ -302,15 +302,31 @@ def _render_design(params: dict) -> dict:
             # nue, sans vibrato, sans jitter et sans la correction dessinee.
             # Elle n'est JAMAIS tracee — elle sert au navigateur a convertir la
             # position du curseur en un ecart de cents. Tronquee a la longueur
-            # de `used` comme les autres courbes : fit_to_budget peut rendre
-            # moins de trames que la duree quand le son deborde du budget, et
-            # les deux courbes doivent s'indexer pareil.
+            # de `used` : fit_to_budget tronque cmds (les commandes) pas used
+            # (les frames), donc aujourd'hui len(used) == p.duration_frames
+            # toujours. Le slice est une assurance contre un changement futur
+            # du contrat.
             "freq_base": design.base_pitch(p)[:len(used)],
             "noise": list(noise) if noise else [],
         },
         "preview": f"/api/preview.wav?t={STATE['counter']}",
         "const_line": f"soundFX.{name:22s} equ <id>",
         "call_line": f"        _soundFX.play soundFX.{name},{priority}",
+    }
+
+
+def _design_init() -> dict:
+    """Reponse du endpoint /api/design/init : les constantes que l'interface doit connaitre."""
+    from . import rhythm
+    return {
+        "categories": {k: v["label"] for k, v in design.CATEGORIES.items()},
+        "instruments": opll.INSTRUMENTS,
+        "kits": list(rhythm.KIT_ORDER),
+        "bounds": design.BOUNDS,
+        "int_params": sorted(design.INT_PARAMS),
+        "max_noise_channel": rhythm.MAX_CHANNEL,
+        "pitch_draw_max_cents": design.PITCH_DRAW_MAX_CENTS,
+        "defaults": design.SfxParams().to_dict(),
     }
 
 
@@ -513,17 +529,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": "aucune source"}, 404)
             return self._send(200, data, "audio/wav")
         if path == "/api/design/init":
-            from . import rhythm
-            return self._json({
-                "categories": {k: v["label"] for k, v in design.CATEGORIES.items()},
-                "instruments": opll.INSTRUMENTS,
-                "kits": list(rhythm.KIT_ORDER),
-                "bounds": design.BOUNDS,
-                "int_params": sorted(design.INT_PARAMS),
-                "max_noise_channel": rhythm.MAX_CHANNEL,
-                "pitch_draw_max_cents": design.PITCH_DRAW_MAX_CENTS,
-                "defaults": design.SfxParams().to_dict(),
-            })
+            return self._json(_design_init())
         if path == "/api/bank":
             return self._json(_bank_view())
         if path == "/api/bank/export.json":
