@@ -1,5 +1,6 @@
 """Le modele de son : enveloppe, hauteur, arpege, bruit."""
 
+import math
 import sys
 
 from to8sfx import design, opll, rhythm
@@ -386,6 +387,86 @@ def test_a_roll_starts_from_a_blank_page():
             p = design.randomize(cat, seed=seed)
             assert p.pitch_draw == (), f"{cat}/{seed} : {p.pitch_draw}"
     print(f"  {len(design.CATEGORIES)} categories x 3 graines : dessin vide")
+
+
+def test_drawn_layer_reaches_target_near_the_ceiling():
+    """Regression du plafond asymetrique entre base_pitch et render.
+
+    Avant le correctif, base_pitch ecretait a 8000 Hz avant de rendre, alors
+    que render() n'ecrete qu'a la toute fin, sur la valeur BRUTE. Le
+    navigateur mesurait donc son geste contre une valeur plafonnee, puis
+    render() appliquait l'ecart obtenu a une valeur differente (la brute) :
+    le resultat manquait sa cible de plusieurs centaines de cents pres du
+    plafond.
+
+    f_start=4000, slide=1.5, 20 trames sans attaque ni palier : a la trame 9
+    la courbe brute vaut environ 8724 Hz, au-dela du plafond de 8000 Hz.
+
+    Cible choisie a 6000 Hz et non 8000 Hz : freq_to_fnum_block plafonne
+    fnum a 511, ce qui place le vrai plafond MATERIEL a 6202,35 Hz
+    (511 * clk / 72 / 2**12) et non a 8000 -- verifie empiriquement, toute
+    cible entre ~6202 Hz et 8000 Hz rend a 6202,35 Hz quel que soit ce qui
+    est vise (limitation preexistante, pas de ce chantier). 6000 Hz reste
+    largement dans la bande utile ET est atteignable avec un residu de
+    quantification fnum/block de l'ordre du cent (mesure : -1.15 cent avant
+    tout dessin), ce qui permet a l'assertion de vraiment discriminer le
+    correctif d'une regression.
+    """
+    p = design.SfxParams(attack_frames=0, hold_frames=0, decay_frames=20,
+                         f_start=4000.0, slide=1.5, slide_delta=0.0)
+    n = p.duration_frames
+    i = 9
+    raw = design.base_pitch(p)[i]
+    target = 6000.0
+    cents = max(-design.PITCH_DRAW_MAX_CENTS, min(design.PITCH_DRAW_MAX_CENTS,
+                1200.0 * math.log2(target / raw)))
+    draw = [0.0] * n
+    draw[i] = cents
+    p2 = design.SfxParams.from_dict({**p.to_dict(), "pitch_draw": draw})
+    frames, _ = design.render(p2)
+    got = opll.fnum_block_to_freq(frames[i].fnum, frames[i].block)
+    err_cents = 1200.0 * math.log2(got / target)
+    assert abs(err_cents) < 3.0, \
+        f"vise {target:.0f} Hz, obtenu {got:.1f} Hz, {err_cents:+.1f} cents d'ecart"
+    print(f"  trame {i} : brut {raw:.0f} Hz, vise {target:.0f} Hz, "
+          f"obtenu {got:.1f} Hz ({err_cents:+.2f} cents)")
+
+
+def test_drawn_layer_reaches_target_near_the_floor():
+    """Mirroir du test precedent, au plancher de 20 Hz.
+
+    Meme defaut, signe inverse : avec un f_start bas et une pente negative,
+    la courbe brute plonge sous 20 Hz. Avant le correctif, base_pitch
+    ecretait a 20 Hz (le plancher) au lieu de rendre la valeur brute plus
+    basse, et le geste manquait sa cible dans l'autre sens.
+
+    f_start=40, slide=-3.0, 20 trames sans attaque ni palier : a la trame 6
+    la courbe brute vaut environ 14,1 Hz, sous le plancher de 20 Hz.
+
+    Cible choisie a 50 Hz : nettement dans le domaine audible, et l'ecart
+    necessaire (~2186 cents depuis 14,1 Hz) reste sous la borne de
+    pitch_draw (±2400 cents) donc n'est pas lui-meme ecrete. Verifie
+    empiriquement que 50 Hz est atteignable au fnum/block pres avec moins de
+    3 cents de residu (mesure : +2.35 cents).
+    """
+    p = design.SfxParams(attack_frames=0, hold_frames=0, decay_frames=20,
+                         f_start=40.0, slide=-3.0, slide_delta=0.0)
+    n = p.duration_frames
+    i = 6
+    raw = design.base_pitch(p)[i]
+    target = 50.0
+    cents = max(-design.PITCH_DRAW_MAX_CENTS, min(design.PITCH_DRAW_MAX_CENTS,
+                1200.0 * math.log2(target / raw)))
+    draw = [0.0] * n
+    draw[i] = cents
+    p2 = design.SfxParams.from_dict({**p.to_dict(), "pitch_draw": draw})
+    frames, _ = design.render(p2)
+    got = opll.fnum_block_to_freq(frames[i].fnum, frames[i].block)
+    err_cents = 1200.0 * math.log2(got / target)
+    assert abs(err_cents) < 3.0, \
+        f"vise {target:.0f} Hz, obtenu {got:.1f} Hz, {err_cents:+.1f} cents d'ecart"
+    print(f"  trame {i} : brut {raw:.1f} Hz, vise {target:.0f} Hz, "
+          f"obtenu {got:.1f} Hz ({err_cents:+.2f} cents)")
 
 
 if __name__ == "__main__":
