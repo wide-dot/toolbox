@@ -1333,7 +1333,7 @@ audioSrc.addEventListener('timeupdate', ()=>{
   }
 });
 $('gen').onclick = () => (mode === 'wav' ? generate() : render());
-$('clearDraw').onclick = () => { CUR.pitch_draw = []; render(); };
+$('clearDraw').onclick = () => { if (!CUR) return; CUR.pitch_draw = []; render(); };
 // Relire un bloc existant : la zone collee est le seul endroit modifiable.
 async function ecouter(){
   const d = await post('/api/listen', {asm: $('listenAsm').value,
