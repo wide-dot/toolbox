@@ -74,6 +74,25 @@ Chaque valeur est bornée à ±2400 cents (`PITCH_DRAW_MAX_CENTS = 2400.0`), soi
 deux octaves de part et d'autre. La fréquence finale reste par ailleurs bornée à
 20–8000 Hz par le `np.clip` déjà présent dans `render`.
 
+**`base_pitch`, elle, ne borne pas — et c'est essentiel.** La première rédaction
+de ce document la faisait écrêter à 20–8000 Hz comme `render` ; la relecture
+finale a montré que c'était un défaut sérieux. `render` applique la correction à
+la valeur **brute** et n'écrête qu'à la toute fin ; si `base_pitch` écrêtait
+avant de renvoyer, le navigateur mesurerait son geste contre une valeur plafonnée
+et le rendu l'appliquerait à une autre. Mesuré : jusqu'à 1648 cents d'écart au
+plafond, et le défaut miroir jusqu'à −2785 cents au plancher, atteignables l'un
+et l'autre dans les plages normales des catégories. Les deux côtés doivent vivre
+dans le **même espace non borné**. `base_pitch` peut donc rendre des valeurs hors
+domaine : c'est sans danger puisqu'elle n'est ni tracée ni jouée, seulement
+dénominateur d'un rapport logarithmique.
+
+**Une limite du matériel, antérieure à ce chantier.** `freq_to_fnum_block`
+plafonne `fnum` à 511, ce qui place le vrai plafond de la puce à **6202 Hz** et
+non à 8000. Toute cible demandée entre les deux rend à 6202 Hz, jusqu'à 440 cents
+sous ce qui était visé. Ce n'est pas un effet du dessin — le comportement est
+identique sans lui — mais un geste posé dans cette bande n'atteindra pas sa
+cible, et il faut le savoir avant de conclure à un bug de la couche dessinée.
+
 ## Le rendu : une addition, au bon endroit
 
 Dans `render()`, **après l'arpège et avant la conversion en hertz** :

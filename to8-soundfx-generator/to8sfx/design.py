@@ -310,12 +310,21 @@ def base_pitch(p: SfxParams) -> list[float]:
     curseur en un ecart de cents. La prendre sur la courbe finale figerait le
     jitter de la trame dans la couche dessinee, et l'erreur s'accumulerait a
     chaque passage ; l'y inclure elle-meme doublerait chaque deplacement.
-    Elle n'est jamais tracee.
+
+    NON BORNEE, volontairement : render() ajoute la correction dessinee a la
+    valeur brute et n'ecrete qu'a la toute fin (voir son commentaire). Si
+    cette fonction ecretait avant de rendre, le navigateur mesurerait le
+    geste contre une valeur plafonnee pendant que render() l'appliquerait a
+    une autre : les deux cotes doivent vivre dans le meme espace non borne,
+    sous peine d'un ecart pouvant depasser mille cents pres des bornes 20 Hz
+    et 8000 Hz. Elle peut donc rendre des valeurs hors du domaine audible ou
+    materiellement irrealisables -- c'est sans danger, puisqu'elle n'est
+    JAMAIS tracee ni jouee : seulement le denominateur d'un rapport
+    logarithmique.
     """
     n = p.duration_frames
     midi, _ = _pitch_semitones(p, n, _local_index(p, n))
-    return [round(float(np.clip(midi_to_freq(float(m)), 20.0, 8000.0)), 2)
-            for m in midi]
+    return [round(float(midi_to_freq(float(m))), 2) for m in midi]
 
 
 def _noise_track(p: SfxParams, n: int) -> list[int] | None:
