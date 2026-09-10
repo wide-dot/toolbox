@@ -298,6 +298,14 @@ def _render_design(params: dict) -> dict:
             # Sans elle, le dessin n'a pas de quoi colorer les bandes de timbre
             # et rend une couleur unique, quel que soit le son.
             "instrument": [f.instrument for f in used],
+            # Courbe de reference du dessin a la main : la hauteur parametrique
+            # nue, sans vibrato, sans jitter et sans la correction dessinee.
+            # Elle n'est JAMAIS tracee — elle sert au navigateur a convertir la
+            # position du curseur en un ecart de cents. Tronquee a la longueur
+            # de `used` comme les autres courbes : fit_to_budget peut rendre
+            # moins de trames que la duree quand le son deborde du budget, et
+            # les deux courbes doivent s'indexer pareil.
+            "freq_base": design.base_pitch(p)[:len(used)],
             "noise": list(noise) if noise else [],
         },
         "preview": f"/api/preview.wav?t={STATE['counter']}",
@@ -513,6 +521,7 @@ class Handler(BaseHTTPRequestHandler):
                 "bounds": design.BOUNDS,
                 "int_params": sorted(design.INT_PARAMS),
                 "max_noise_channel": rhythm.MAX_CHANNEL,
+                "pitch_draw_max_cents": design.PITCH_DRAW_MAX_CENTS,
                 "defaults": design.SfxParams().to_dict(),
             })
         if path == "/api/bank":

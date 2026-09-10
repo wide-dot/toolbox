@@ -84,6 +84,38 @@ def test_bank_endpoints_keep_state():
     print(f"  banque : ajout, vue, retrait ; {view['build']['bytes']} octets")
 
 
+def test_render_design_ships_the_reference_curve():
+    """L'interface ne peut pas convertir un clic en cents sans cette courbe."""
+    p = design.randomize("tir", seed=21)
+    out = server._render_design({"params": p.to_dict(), "channel": 4,
+                                 "name": "Laser", "priority": 1})
+    c = out["curves"]
+    assert "freq_base" in c, "freq_base absente de la reponse"
+    assert c["freq_base"], "freq_base vide"
+    print(f"  {len(c['freq_base'])} trames de reference")
+
+
+def test_the_reference_curve_is_indexed_like_the_others():
+    """Les deux courbes doivent s'indexer de la meme facon.
+
+    fit_to_budget peut rendre moins de trames que la duree quand le son
+    deborde des 255 commandes. Si freq_base gardait la duree pleine, un clic
+    en fin de son se mesurerait contre la mauvaise trame — sans erreur, juste
+    un resultat faux.
+    """
+    p = design.randomize("explosion", seed=5)
+    p.attack_frames, p.hold_frames, p.decay_frames = 1, 0, 90
+    p.jitter_cents = 1200.0                # la hauteur change a chaque trame
+    p.arp_frames, p.arp_steps = 1, (0, 7, 12)
+    out = server._render_design({"params": p.to_dict(), "channel": 4,
+                                 "name": "Boum", "priority": 1})
+    c = out["curves"]
+    assert len(c["freq_base"]) == len(c["freq"]), \
+        f"reference {len(c['freq_base'])} vs rendu {len(c['freq'])}"
+    print(f"  duree {p.duration_frames}, rendu {len(c['freq'])} trames, "
+          f"tronque={out['info']['truncated']}")
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
