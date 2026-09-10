@@ -561,10 +561,12 @@ def test_render_design_ships_the_reference_curve():
 def test_the_reference_curve_is_indexed_like_the_others():
     """Les deux courbes doivent s'indexer de la meme facon.
 
-    fit_to_budget peut rendre moins de trames que la duree quand le son
-    deborde des 255 commandes. Si freq_base gardait la duree pleine, un clic
-    en fin de son se mesurerait contre la mauvaise trame — sans erreur, juste
-    un resultat faux.
+    ATTENTION : fit_to_budget ne tronque QUE la liste des commandes, jamais
+    la liste de trames qu'il renvoie. `used` vaut donc toujours
+    duration_frames, et l'egalite des longueurs tient meme sans la tranche.
+    Une assertion qui se contenterait de la comparer ne pourrait pas echouer.
+    On substitue donc a fit_to_budget un bouchon qui rend un `used` court,
+    pour verifier que freq_base le suit vraiment.
     """
     p = design.randomize("explosion", seed=5)
     p.attack_frames, p.hold_frames, p.decay_frames = 1, 0, 90
@@ -594,9 +596,11 @@ Dans `to8sfx/server.py`, dans le dictionnaire `"curves"` retourné par `_render_
             # nue, sans vibrato, sans jitter et sans la correction dessinee.
             # Elle n'est JAMAIS tracee — elle sert au navigateur a convertir la
             # position du curseur en un ecart de cents. Tronquee a la longueur
-            # de `used` comme les autres courbes : fit_to_budget peut rendre
-            # moins de trames que la duree quand le son deborde du budget, et
-            # les deux courbes doivent s'indexer pareil.
+            # de `used` par assurance : aujourd'hui fit_to_budget ne tronque
+            # que la liste des commandes et rend toujours autant de trames que
+            # la duree, donc la tranche ne coupe rien. Elle est la pour le jour
+            # ou ce contrat changerait, et les deux courbes doivent s'indexer
+            # pareil sous peine de mesurer un clic contre la mauvaise trame.
             "freq_base": design.base_pitch(p)[:len(used)],
 ```
 

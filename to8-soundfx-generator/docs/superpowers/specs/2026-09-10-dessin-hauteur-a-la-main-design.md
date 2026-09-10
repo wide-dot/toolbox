@@ -121,8 +121,20 @@ hertz, sans jamais ajouter `pitch_draw`. La signature de `render` ne change
 pas : ses appelants (`server`, `cli`, tests) ne sont pas touchés.
 
 `freq_base` est tronquée à la longueur de `used` avant l'envoi, pour que les
-deux courbes s'indexent de la même façon : `fit_to_budget` peut rendre moins de
-trames que `n` quand le son est tronqué.
+deux courbes s'indexent de la même façon.
+
+**Correction d'une affirmation fausse de la première rédaction de ce document.**
+On lisait ici que « `fit_to_budget` peut rendre moins de trames que `n` quand le
+son est tronqué ». C'est faux, et la relecture de la tâche 4 l'a établi sur un
+cas de vraie troncature : `fit_to_budget` ne tronque que la liste des
+**commandes** (`cmds[:max_commands]`), jamais la liste de trames qu'il renvoie.
+`used` vaut donc toujours `duration_frames`, et les deux courbes s'indexent déjà
+pareil sans la troncature.
+
+La troncature reste, mais comme ce qu'elle est : une assurance à une expression,
+au cas où le contrat de `fit_to_budget` changerait. Elle est testée en tant que
+telle — en substituant à `fit_to_budget` un bouchon qui rend un `used` court —
+et non par une assertion qui tiendrait de toute façon.
 
 ## L'interface
 
