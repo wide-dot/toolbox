@@ -91,6 +91,11 @@
   .note{display:inline-block;background:#12141a;border:1px solid var(--line);border-radius:5px;
     padding:1px 7px;margin:2px 4px 2px 0;color:var(--accent)}
   .note i{color:var(--dim);font-style:normal;margin-left:6px;font-size:11px}
+  .vline{border:1px solid var(--line);border-radius:6px;padding:5px 8px;margin-bottom:5px;
+    cursor:pointer;line-height:1.45}
+  .vline:hover{border-color:var(--dim)}
+  .vline.on{border-color:var(--accent);background:#12211c}
+  .vline .sub2{font-size:11px;color:var(--dim)}
   .hide{display:none!important}
   code{font-family:var(--mono);background:#12141a;padding:1px 5px;border-radius:4px}
 </style>
@@ -107,6 +112,42 @@
   <div class="tabs">
     <button id="tabCreate" class="on">Cr&eacute;er</button>
     <button id="tabWav">Fichier audio</button>
+    <button id="tabVgm">VGM</button>
+  </div>
+
+  <!-- ---------- mode VGM ---------- -->
+  <div id="panVgm" class="hide">
+    <fieldset><legend>Export VGM</legend>
+      <div id="vgmDrop" class="drop">D&eacute;poser un <b>.vgm</b> ou <b>.vgz</b><br>
+        <span style="font-size:11px">export DefleMask &mdash; syst&egrave;me Master System + FM</span></div>
+      <input type="file" id="vgmFile" accept=".vgm,.vgz" class="hide">
+      <div id="vgmInfo" class="hint"></div>
+      <div class="hint">Le VGM porte les &eacute;critures de registres elles-m&ecirc;mes&nbsp;:
+        rien n'est devin&eacute; ici, contrairement &agrave; l'analyse d'un enregistrement.
+        Ce que DefleMask a envoy&eacute; &agrave; la puce est ce qui est &eacute;crit.</div>
+    </fieldset>
+
+    <fieldset><legend>Voie &agrave; transcrire</legend>
+      <div id="vgmChannels" class="rank"></div>
+      <div class="hint">Le driver ne pilote qu'<b>une</b> voie&nbsp;: il ajoute le
+        num&eacute;ro de voie de sortie aux registres au-dessus de <code>$0F</code>.
+        Une seule voie du VGM est donc transcrite, les autres sont ignor&eacute;es.
+        Pour un bruitage, composer sur une seule voie dans DefleMask.</div>
+    </fieldset>
+
+    <fieldset><legend>Sortie</legend>
+      <div class="row">
+        <div><label>Nom</label><input type="text" id="vgmName" value="VgmSound"></div>
+        <div><label>Voie YM2413</label><input type="number" id="vgmOut" min="0" max="8" value="4"></div>
+      </div>
+      <div><label>Priorit&eacute;</label><input type="number" id="vgmPriority" min="0" max="255" value="1"></div>
+      <div class="msg">Ce mode ne remplit <b>pas la banque</b>. Un son import&eacute; n'a
+        pas de param&egrave;tres &agrave; r&eacute;g&eacute;n&eacute;rer, alors que la banque
+        n'enregistre que des recettes&nbsp;: c'est ce qui rend ses sons modifiables
+        des semaines plus tard. Copier le bloc, puis ajouter &agrave; la main son
+        <code>fdb</code> dans <code>soundFX.soundTable</code> et son <code>equ</code>
+        dans <code>soundFX.const.asm</code>, dans le m&ecirc;me ordre.</div>
+    </fieldset>
   </div>
 
   <!-- ---------- mode fichier ---------- -->
@@ -320,11 +361,31 @@
     </div>
   </div>
 
+  <div id="vgmWrap" class="hide">
+    <canvas id="vgmCv" width="1400" height="260"></canvas>
+    <div class="selbar">
+      <label>d&eacute;but (trame) <input type="number" id="vgmStart" step="1" min="0" value="0"></label>
+      <label>fin (trame) <input type="number" id="vgmEnd" step="1" min="0" value="0"></label>
+      <button class="ghost" id="vgmAll">tout s&eacute;lectionner</button>
+      <button class="ghost" id="vgmNote">caler sur la note</button>
+      <span class="hint" id="vgmSel"></span>
+    </div>
+    <div class="legend">
+      <span><i class="k" style="background:#6fd0a8"></i>hauteur (&eacute;chelle log)</span>
+      <span><i class="k" style="background:#e8b04b"></i>volume</span>
+      <span><i class="k" style="background:#39414d"></i>note coup&eacute;e (key-off)</span>
+    </div>
+    <div class="hint" style="margin:-8px 2px 14px">La s&eacute;lection est en
+      <b>trames de 20&nbsp;ms</b>, la grille m&ecirc;me du driver&nbsp;: c'est la seule
+      unit&eacute; qui n'arrondit pas deux fois. Glisser sur le trac&eacute; ou attraper
+      une poign&eacute;e pour ajuster.</div>
+  </div>
+
   <div id="msgs"></div>
   <div class="badges" id="badges"></div>
 
   <canvas id="cv" width="1200" height="520"></canvas>
-  <div class="legend">
+  <div class="legend" id="cvLegend">
     <span><i class="k" style="background:#6fd0a8"></i>hauteur (&eacute;chelle log)</span>
     <span><i class="k" style="background:#e8b04b"></i>volume</span>
     <span><i class="k" style="background:#7aa2f7"></i>instrument par trame</span>
@@ -461,20 +522,43 @@ function syncLabels(){
 }
 
 // ---------- onglets ----------
+// Un seul endroit decide de ce qui est visible par onglet. Avec trois
+// gestionnaires qui se rallongeaient chacun, oublier un panneau dans l'un des
+// trois etait une question de temps — et l'onglet VGM n'a en commun avec les
+// deux autres que la zone de sortie assembleur.
 let mode = 'create';
-$('tabCreate').onclick = ()=>{ mode='create'; $('wavOnly').classList.add('hide');
-  $('drawBox').classList.remove('hide');
-  $('tabCreate').classList.add('on');
-  $('tabWav').classList.remove('on'); $('panCreate').classList.remove('hide');
-  $('panWav').classList.add('hide'); $('waveWrap').classList.add('hide');
-  if (CUR) render(); };
-$('tabWav').onclick = ()=>{ mode='wav'; $('wavOnly').classList.remove('hide');
-  $('drawBox').classList.add('hide');
-  $('tabWav').classList.add('on');
-  $('tabCreate').classList.remove('on'); $('panWav').classList.remove('hide');
-  $('panCreate').classList.add('hide');
-  if(SRC){ $('waveWrap').classList.remove('hide'); drawWave(); }
-  if(hasSource) generate(); };
+const PANNEAUX = {
+  create: {tab: 'tabCreate',
+           ids: ['panCreate','drawBox','cv','cvLegend','bandsBox','rank','melodyOut']},
+  wav:    {tab: 'tabWav',
+           ids: ['panWav','wavOnly','cv','cvLegend','bandsBox','rank','melodyOut']},
+  vgm:    {tab: 'tabVgm',
+           ids: ['panVgm','vgmWrap']},
+};
+// L'union des panneaux geres, calculee une fois : masquer par difference evite
+// qu'un element partage par deux modes (le canvas des courbes, par exemple) ne
+// depende de l'ordre de parcours.
+const TOUS_PANNEAUX = [...new Set(Object.values(PANNEAUX).flatMap(p => p.ids))];
+
+function setMode(m){
+  mode = m;
+  const visibles = new Set(PANNEAUX[m].ids);
+  for (const id of TOUS_PANNEAUX) $(id).classList.toggle('hide', !visibles.has(id));
+  for (const [nom, p] of Object.entries(PANNEAUX)) $(p.tab).classList.toggle('on', nom === m);
+  // La forme d'onde ne s'affiche qu'en mode fichier, et seulement si un fichier
+  // est charge : c'etait deja la regle avant l'onglet VGM.
+  $('waveWrap').classList.toggle('hide', !(m === 'wav' && SRC));
+  // Pas de source a comparer en mode VGM, et rien a regenerer en direct : la
+  // selection declenche elle-meme le rendu.
+  $('playSrc').classList.toggle('hide', m === 'vgm');
+  $('live').parentElement.classList.toggle('hide', m === 'vgm');
+  if (m === 'create' && CUR) render();
+  if (m === 'wav'){ if (SRC) drawWave(); if (hasSource) generate(); }
+  if (m === 'vgm' && VGM) drawVgm();
+}
+$('tabCreate').onclick = ()=> setMode('create');
+$('tabWav').onclick    = ()=> setMode('wav');
+$('tabVgm').onclick    = ()=> setMode('vgm');
 
 // ---------- upload ----------
 $('drop').onclick = ()=> $('file').click();
@@ -665,11 +749,12 @@ function showBadges(s, info){
   // `info` porte truncated : apres troncature le compte vaut EXACTEMENT 255,
   // donc un test `> 255` ne se declenchait jamais et le badge restait neutre
   // alors que la fin du son avait ete coupee.
-  const coupe = !!(info && info.truncated);
+  const coupe = !!(info && info.truncated) || !!s.over_budget;
   const serre = !coupe && s.commands > 220;
   const etat = coupe ? 'bad' : (serre ? 'warn' : '');
-  const suffixe = coupe ? ' \u2014 TRONQU\u00c9'
-                : (serre ? ' \u2014 bient\u00f4t plein' : '');
+  const suffixe = (info && info.truncated) ? ' \u2014 TRONQU\u00c9'
+                : (s.over_budget ? ' \u2014 HORS BUDGET'
+                : (serre ? ' \u2014 bient\u00f4t plein' : ''));
   const simplifie = info && (info.cents > 0 || info.vol_step > 1)
     ? `<span class="badge warn">simplifi\u00e9 pour tenir<b> ${
         info.cents > 0 ? info.cents.toFixed(0) + ' cents' : ''}${
@@ -1332,7 +1417,11 @@ audioSrc.addEventListener('timeupdate', ()=>{
     else audioSrc.pause();
   }
 });
-$('gen').onclick = () => (mode === 'wav' ? generate() : render());
+$('gen').onclick = () => {
+  if (mode === 'wav') return generate();
+  if (mode === 'vgm') return renderVgm();
+  return render();
+};
 $('clearDraw').onclick = () => { if (!CUR) return; CUR.pitch_draw = []; render(); };
 // Relire un bloc existant : la zone collee est le seul endroit modifiable.
 async function ecouter(){
@@ -1378,6 +1467,237 @@ $('loadBank').onclick = async () => {
   showMsgs([`Banque chargee : ${d.sounds.length} son(s). Cliquer une ligne pour `
             + `reprendre ce son avec ses reglages.`]);
 };
+
+// ---------- onglet VGM ----------
+//
+// Volontairement independant de la machinerie de l'onglet Fichier audio : celle-ci
+// est nouee a SRC (l'analyse audio) et rappelle generate(). La rendre polymorphe
+// aurait mis en jeu le mode fichier, qui doit continuer a marcher a l'identique.
+// Soixante lignes de canvas en double valent mieux que ce risque.
+
+let VGM = null;           // reponse de /api/vgm/upload
+let vgmCh = null;         // voie source choisie dans le VGM
+let VTRACE = [];          // etat de cette voie sur tout le fichier
+// La fenetre est en TICKS, pas en secondes : la grille du VGM est deja celle du
+// driver, passer par les secondes arrondirait deux fois.
+let vsel = {a: 0, b: 0};
+const VGM_DEFAUT = 100;   // 2 s : au-dela on deborde presque toujours les 255 commandes
+
+$('vgmDrop').onclick = ()=> $('vgmFile').click();
+['dragenter','dragover'].forEach(e => $('vgmDrop').addEventListener(e, ev => {
+  ev.preventDefault(); $('vgmDrop').classList.add('hot'); }));
+['dragleave','drop'].forEach(e => $('vgmDrop').addEventListener(e, ev => {
+  ev.preventDefault(); $('vgmDrop').classList.remove('hot'); }));
+$('vgmDrop').addEventListener('drop', ev => {
+  if (ev.dataTransfer.files[0]) uploadVgm(ev.dataTransfer.files[0]); });
+$('vgmFile').onchange = e => { if (e.target.files[0]) uploadVgm(e.target.files[0]); };
+
+async function uploadVgm(f){
+  $('vgmInfo').textContent = 'lecture…';
+  const r = await fetch('/api/vgm/upload', {method:'POST',
+    headers:{'X-Filename': f.name}, body: f});
+  const d = await r.json();
+  if (d.error){ showMsgs([d.error], true); $('vgmInfo').textContent = ''; return; }
+  VGM = d; VTRACE = []; vgmCh = null;
+  $('vgmInfo').innerHTML = `<b>${d.name}</b><br>${d.seconds.toFixed(2)} s — `
+    + `${d.n_ticks} trames — horloge ${d.clock} Hz`;
+  showMsgs(d.warnings);
+  if (!$('vgmName').value || $('vgmName').value === 'VgmSound')
+    $('vgmName').value = nomPropre(d.name);
+  listerVoies();
+  // On ouvre sur la voie la plus active, en ecartant celles que le mode rythme
+  // rend muettes : c'est presque toujours la bonne, et ca evite un ecran vide.
+  const utiles = d.channels.filter(c => !(d.has_rhythm && c.channel > 5));
+  const choix = (utiles.length ? utiles : d.channels)
+    .reduce((m, c) => (!m || c.writes > m.writes) ? c : m, null);
+  if (choix) choisirVoie(choix.channel);
+}
+
+// Le nom devient une etiquette assembleur : lettres, chiffres et souligne.
+function nomPropre(fichier){
+  const base = fichier.replace(/\.(vgm|vgz)$/i, '').replace(/[^A-Za-z0-9_]/g, '');
+  return /^[A-Za-z_]/.test(base) ? base : 'Vgm' + base;
+}
+
+function listerVoies(){
+  if (!VGM){ $('vgmChannels').innerHTML = ''; return; }
+  if (!VGM.channels.length){
+    $('vgmChannels').innerHTML = '<i>aucune voie mélodique dans ce fichier</i>'; return; }
+  $('vgmChannels').innerHTML = VGM.channels.map(c => {
+    const muette = VGM.has_rhythm && c.channel > 5;
+    return `<div class="vline${c.channel === vgmCh ? ' on' : ''}" data-ch="${c.channel}">`
+      + `<b>voie ${c.channel}</b> · ${c.writes} écritures · `
+      + `trames ${c.first_tick}–${c.last_tick}<br>`
+      + `<span class="sub2">${c.instrument_names.join(', ')}`
+      + `${c.uses_custom ? ' · instrument CUSTOM' : ''}`
+      + `${muette ? ' · MUETTE (rythme actif)' : ''}</span></div>`;
+  }).join('');
+  for (const el of $('vgmChannels').querySelectorAll('.vline'))
+    el.onclick = ()=> choisirVoie(+el.dataset.ch);
+}
+
+async function choisirVoie(ch){
+  if (!VGM) return;
+  vgmCh = ch;
+  const info = VGM.channels.find(c => c.channel === ch);
+  const a = info ? info.first_tick : 0;
+  vsel = {a, b: Math.min(VGM.n_ticks, a + VGM_DEFAUT)};
+  listerVoies();
+  const d = await post('/api/vgm/trace', {src_channel: ch});
+  if (d.error){ showMsgs([d.error], true); return; }
+  VTRACE = d.trace;
+  syncVsel(); drawVgm(); renderVgm();
+}
+
+function syncVsel(){
+  if (!VGM) return;
+  $('vgmStart').value = vsel.a;
+  $('vgmEnd').value   = vsel.b;
+  $('vgmStart').max = $('vgmEnd').max = VGM.n_ticks;
+  const n = vsel.b - vsel.a;
+  $('vgmSel').textContent = `sélection ${n} trame${n > 1 ? 's' : ''} `
+    + `— ${(n * TICK).toFixed(2)} s`;
+}
+
+// La note tenue autour du debut de la selection : l'equivalent de « caler sur
+// le son » du mode fichier, mais sur le key-on au lieu de l'enveloppe.
+function calerSurNote(){
+  if (!VTRACE.length) return;
+  let i = vsel.a;
+  while (i < VTRACE.length && !VTRACE[i].on) i++;
+  if (i >= VTRACE.length){ i = VTRACE.findIndex(t => t.on); if (i < 0) return; }
+  let j = i;
+  while (j < VTRACE.length && VTRACE[j].on) j++;
+  vsel = {a: i, b: Math.max(i + 1, j)};
+}
+
+function drawVgm(){
+  if (!VGM) return;
+  const cv = $('vgmCv'), g = cv.getContext('2d');
+  const W = cv.width, H = cv.height, base = H - 22;
+  g.clearRect(0, 0, W, H); g.fillStyle = '#1c1f26'; g.fillRect(0, 0, W, H);
+  const N = Math.max(VGM.n_ticks, 1);
+  const X = t => t / N * W;
+
+  // zones hors selection, grisees — meme code visuel que la forme d'onde
+  g.fillStyle = 'rgba(10,11,14,.62)';
+  g.fillRect(0, 0, X(vsel.a), H);
+  g.fillRect(X(vsel.b), 0, W - X(vsel.b), H);
+
+  if (VTRACE.length){
+    const hz = VTRACE.filter(t => t.hz > 0).map(t => t.hz);
+    const lo = Math.log2(Math.max(20, Math.min(...hz, 1e9)));
+    const hi = Math.log2(Math.max(...hz, 40));
+    const span = Math.max(hi - lo, 0.5);
+    const w = Math.max(W / VTRACE.length, 1);
+    for (let i = 0; i < VTRACE.length; i++){
+      const t = VTRACE[i], x = X(i), dedans = i >= vsel.a && i < vsel.b;
+      // volume : 0 = le plus fort, d'ou le 15 - vol
+      const vh = (15 - t.vol) / 15 * (base - 26);
+      g.fillStyle = dedans ? 'rgba(232,176,75,.30)' : 'rgba(232,176,75,.10)';
+      g.fillRect(x, base - vh, w, vh);
+      if (!t.hz) continue;
+      const y = base - (Math.log2(t.hz) - lo) / span * (base - 30) - 12;
+      g.fillStyle = t.on ? (dedans ? '#6fd0a8' : '#2f5a4a') : '#39414d';
+      g.fillRect(x, y, w, t.on ? 3 : 2);
+    }
+    g.fillStyle = '#98a0b0'; g.font = '11px ui-monospace,monospace';
+    g.fillText(`${Math.round(2 ** hi)} Hz`, 4, 12);
+    g.fillText(`${Math.round(2 ** lo)} Hz`, 4, base - 2);
+  } else {
+    g.fillStyle = '#98a0b0'; g.font = '12px system-ui';
+    g.fillText('choisir une voie dans la colonne de gauche', 12, H / 2);
+  }
+
+  // graduations en secondes, mais la selection reste en trames
+  g.strokeStyle = '#2b303a'; g.lineWidth = 1; g.fillStyle = '#98a0b0';
+  g.font = '11px ui-monospace,monospace';
+  const sec = N * TICK;
+  const pas = sec > 40 ? 10 : (sec > 8 ? 2 : (sec > 2 ? 0.5 : 0.1));
+  for (let t = 0; t <= sec + 1e-9; t += pas){
+    const x = X(t / TICK);
+    g.beginPath(); g.moveTo(x, H - 16); g.lineTo(x, H); g.stroke();
+    g.fillText(t.toFixed(pas < 1 ? 1 : 0) + 's', x + 3, H - 4);
+  }
+
+  for (const [t, cote] of [[vsel.a, 'a'], [vsel.b, 'b']]){
+    const x = X(t);
+    g.strokeStyle = '#e8b04b'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke();
+    g.fillStyle = '#e8b04b';
+    g.fillRect(cote === 'a' ? x : x - 8, 0, 8, 18);
+    g.fillStyle = '#14161a'; g.font = 'bold 11px system-ui';
+    g.fillText(cote === 'a' ? '[' : ']', cote === 'a' ? x + 2 : x - 6, 13);
+  }
+}
+
+let vdrag = null;
+const tickAt = ev => {
+  const r = $('vgmCv').getBoundingClientRect();
+  return Math.max(0, Math.min(VGM.n_ticks,
+    Math.round((ev.clientX - r.left) / r.width * VGM.n_ticks)));
+};
+$('vgmCv').addEventListener('mousedown', ev => {
+  if (!VGM) return;
+  const t = tickAt(ev);
+  const tol = Math.max(2, 8 / $('vgmCv').getBoundingClientRect().width * VGM.n_ticks);
+  if (Math.abs(t - vsel.a) < tol)      vdrag = 'a';
+  else if (Math.abs(t - vsel.b) < tol) vdrag = 'b';
+  else { vsel.a = t; vsel.b = t; vdrag = 'b'; }
+  syncVsel(); drawVgm(); ev.preventDefault();
+});
+window.addEventListener('mousemove', ev => {
+  if (!vdrag || !VGM) return;
+  vsel[vdrag] = tickAt(ev); syncVsel(); drawVgm();
+});
+window.addEventListener('mouseup', () => {
+  if (!vdrag) return;
+  vdrag = null;
+  if (vsel.a > vsel.b){ const t = vsel.a; vsel.a = vsel.b; vsel.b = t; }
+  if (vsel.b <= vsel.a) vsel.b = Math.min(VGM.n_ticks, vsel.a + 1);
+  syncVsel(); drawVgm(); renderVgm();
+});
+
+$('vgmAll').onclick  = ()=>{ if (!VGM) return;
+  vsel = {a: 0, b: VGM.n_ticks}; syncVsel(); drawVgm(); renderVgm(); };
+$('vgmNote').onclick = ()=>{ if (!VGM) return;
+  calerSurNote(); syncVsel(); drawVgm(); renderVgm(); };
+for (const id of ['vgmStart','vgmEnd']) $(id).addEventListener('change', ()=>{
+  if (!VGM) return;
+  vsel.a = Math.max(0, Math.min(VGM.n_ticks, +$('vgmStart').value | 0));
+  vsel.b = Math.max(0, Math.min(VGM.n_ticks, +$('vgmEnd').value | 0));
+  if (vsel.b <= vsel.a) vsel.b = Math.min(VGM.n_ticks, vsel.a + 1);
+  syncVsel(); drawVgm(); renderVgm();
+});
+for (const id of ['vgmName','vgmOut','vgmPriority'])
+  $(id).addEventListener('change', ()=>{ if (VGM && vgmCh !== null) renderVgm(); });
+
+let vbusy = false, vagain = false;
+async function renderVgm(){
+  if (!VGM){ showMsgs(['Déposer un fichier .vgm ou .vgz.']); return; }
+  if (vgmCh === null){ showMsgs(['Choisir une voie à transcrire.']); return; }
+  if (vbusy){ vagain = true; return; }
+  vbusy = true; $('gen').disabled = true;
+  try {
+    const d = await post('/api/vgm/render', {
+      src_channel: vgmCh, start_frame: vsel.a, end_frame: vsel.b,
+      out_channel: +$('vgmOut').value, name: $('vgmName').value,
+      priority: +$('vgmPriority').value,
+    });
+    if (d.error){ showMsgs([d.error], true); return; }
+    $('asm').value = d.asm;
+    lastPreview = d.preview;
+    audioOut.src = d.preview; $('playOut').disabled = false;
+    // Pas de d.info ici : rien n'est simplifie automatiquement en mode VGM, la
+    // fenetre de selection EST le reglage du budget.
+    showBadges(d.stats, null);
+    showMsgs(d.warnings);
+    montrerSortie('asm');
+  } finally {
+    vbusy = false; $('gen').disabled = false;
+    if (vagain){ vagain = false; renderVgm(); }
+  }
+}
 
 // ---------- reactivite ----------
 $('instrument_mode').onchange = e => {

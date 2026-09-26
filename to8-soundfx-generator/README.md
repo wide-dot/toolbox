@@ -6,6 +6,9 @@ tirage au sort, mutation à cadenas, trois couches de synthèse (ton, arpège,
 bruit), et une banque qui écrit d'un coup les deux fichiers assembleur
 cohérents entre eux. L'analyse d'un fichier audio existant reste disponible
 dans son propre onglet, mais ce n'est plus le point d'entrée principal.
+Un troisième onglet transcrit un **export `.vgm` de DefleMask** : on compose
+le bruitage dans le tracker, et l'outil relit les écritures de registres
+telles quelles.
 
 ---
 
@@ -64,7 +67,7 @@ décode et la convertit en mono 44,1 kHz au chargement. Pour extraire quand mêm
 ./run.sh            # ouvre http://127.0.0.1:8731/
 ```
 
-Deux onglets — **Créer** et **Fichier audio**.
+Trois onglets — **Créer**, **Fichier audio** et **VGM**.
 
 **Créer** est le point d'entrée principal :
 
@@ -98,9 +101,10 @@ sélection à la souris, le mode mélodique, le bouton **Générer** et la case
 *régénérer en direct*. Voir plus bas. C'est là que le bouton **Source** sert à
 comparer le rendu TO8 à l'enregistrement d'origine.
 
-Le bouton **Rendu TO8** (rejouer le dernier son généré, dans les deux onglets)
-et le bloc assembleur prêt à copier (**Copier l'assembleur**) sont communs aux
-deux modes. La barre latérale reste en revanche partagée sans être filtrée par
+**VGM** transcrit un export DefleMask. Voir **Depuis un export VGM** plus bas.
+
+Le bouton **Rendu TO8** (rejouer le dernier son généré) et le bloc assembleur
+prêt à copier (**Copier l'assembleur**) sont communs aux trois modes. La barre latérale reste en revanche partagée sans être filtrée par
 onglet : rester sur les contrôles propres à **Créer** (catégorie, tirage,
 mutation, affiner, banque) évite d'aller titiller les réglages du mode fichier
 audio (instrument, mélodique, nom/voie de sortie), qui appellent le point
@@ -128,6 +132,8 @@ niveau qu'ils auront dans le jeu.
 ./cli.py wav laser.wav --name Laser --channel 4 --auto-instrument -o son.asm
 ./cli.py wav prise.wav --start-ms 1200 --end-ms 1800 --name Impact -o son.asm
 ./cli.py wav laser.wav --interleave --switch-penalty 0.5 -o son.asm
+./cli.py vgm bruit.vgm --survey
+./cli.py vgm bruit.vgm --from-channel 2 --from-frame 40 --to-frame 90 --name Laser -o son.asm
 ./cli.py import ../../.../r-type/objects/soundFX/soundFX.asm soundFX.FireSound.data --wav rtype.wav
 ```
 
@@ -144,8 +150,67 @@ ordre. C'est la seule commande qui sait produire les deux fichiers cohérents
 d'un coup ; l'interface construit la banque interactivement mais ne les écrit
 pas elle-même sur disque.
 
+`vgm` transcrit une voie d'un export DefleMask. `--survey` n'imprime que
+l'inventaire des voies, sans rien générer : c'est la première étape, puisque
+choisir une voie à l'aveugle dans un fichier de 50 secondes revient à tirer au
+hasard. Attention au sens des deux options de voie : `--from-channel` est la
+voie **dans le VGM**, `--channel` la voie YM2413 **de sortie** qui part dans
+l'en-tête du bloc — le même sens que pour `create` et `wav`.
+
 `import` relit un bloc existant : c'est ce qui a servi à valider le générateur
 contre les six bruitages de r-type.
+
+---
+
+## Depuis un export VGM (DefleMask)
+
+Le troisième onglet part d'un fichier `.vgm` (ou `.vgz`, gzippé) exporté depuis
+DefleMask, composé sur un système qui emploie le YM2413 — **Master System + FM**.
+C'est la voie d'entrée à préférer quand on veut composer le bruitage *à
+l'oreille, dans un tracker*, avec un piano-roll et des enveloppes.
+
+Ce que ça apporte que les deux autres onglets n'ont pas : le VGM porte **les
+écritures de registres elles-mêmes**. Il n'y a rien à deviner — ni hauteur à
+détecter, ni timbre à apparier. Ce que DefleMask a envoyé à la puce est ce qui
+est écrit.
+
+**Une seule voie.** Le driver ne pilote qu'une voie : il *ajoute* le numéro de
+voie de sortie aux registres au-dessus de `$0F`. Une seule voie du VGM est donc
+transcrite, et les autres sont ignorées — composer le bruitage sur une seule
+voie dans DefleMask. La colonne de gauche liste les voies actives avec leur
+nombre d'écritures, leur étendue en trames et les instruments employés ; l'outil
+ouvre d'office sur la plus active.
+
+**La sélection est en trames de 20 ms**, pas en secondes : c'est la grille même
+du driver, et la seule unité qui n'arrondisse pas deux fois. Glisser sur le
+tracé ou attraper une poignée. Le compteur de commandes se met à jour à chaque
+mouvement, et passe au rouge au-delà de 255 — la fenêtre de sélection **est** le
+réglage du budget, rien n'est simplifié automatiquement dans ce mode. À
+l'ouverture d'une voie, la fenêtre fait 100 trames (2 s) : au-delà, on déborde
+presque toujours.
+
+**Ce qui est conservé, et ce qui ne l'est pas :**
+
+| | |
+|---|---|
+| plusieurs écritures dans la même trame | conservées (le driver accepte un délai 0) |
+| bit sustain, changement d'instrument en cours de son | conservés |
+| état de la voie au début de la fenêtre | réémis en tête, sinon une sélection qui démarre au milieu d'une note jouerait avec ce qu'un bruitage précédent a laissé dans la puce |
+| instrument custom (`$00-$07`) | conservé, via la commande `$FF` |
+| deux patchs custom différents dans la même fenêtre | **refusé** avec un avertissement : le bloc n'en porte qu'un |
+| section rythme | **non transcrite** — pour un bruitage percussif, passer par la couche bruit de l'onglet Créer |
+| les huit autres voies | ignorées |
+
+**Le tempo est préservé même si DefleMask a exporté en 60 Hz.** Le VGM compte le
+temps en samples à 44 100 Hz ; on cumule et on divise par 882 en reportant le
+reste. Compter une attente pour une trame étirerait le bruitage de 20 %.
+
+**Ce mode ne remplit pas la banque.** Un son importé n'a pas de paramètres à
+régénérer, alors que la banque n'enregistre que des recettes — c'est ce qui rend
+ses sons modifiables des semaines plus tard. Le bloc se copie donc à la main,
+avec son `fdb` dans `soundFX.soundTable` et son `equ` dans `soundFX.const.asm`,
+comme décrit juste en dessous. Pour retoucher un bruitage VGM, on retouche dans
+DefleMask et on réexporte.
 
 ---
 
@@ -327,10 +392,10 @@ niveau. L'option est donc **désactivée par défaut**, et l'interface le rappel
 
 ## Validation
 
-`python3 -m tests` (77 tests, dans `tests/test_opll.py`, `test_analyze.py`,
+`python3 -m tests` (123 tests, dans `tests/test_opll.py`, `test_analyze.py`,
 `test_melody.py`, `test_design.py`, `test_rhythm.py`, `test_codegen_noise.py`,
-`test_bank.py` et `test_server_design.py`) vérifie, contre l'émulateur, entre
-autres :
+`test_bank.py`, `test_server_design.py`, `test_vgm.py`, `test_server_vgm.py` et
+`test_cli_vgm.py`) vérifie, contre l'émulateur, entre autres :
 
 - la formule `f = fnum × clk / 72 / 2^(19−block)` — écart max mesuré **0,02 %** ;
 - le pas de volume à **3,01 dB** par cran ;
@@ -363,6 +428,25 @@ driver — pour **9 octets de plus**.
 
 Les six bruitages de r-type, relus par `import`, redonnent **exactement** les
 tailles mesurées par lwasm (76, 118, 130, 130, 115, 199 = 768 octets).
+
+**Relecture VGM.** `test_vgm.py` construit ses fichiers dans le test plutôt que
+d'en versionner, et couvre les trois conversions où une erreur ne fait pas
+planter mais produit un bruitage qui joue faux :
+
+- un export 60 Hz et un export 50 Hz de même durée réelle donnent le même nombre
+  de trames (dix attentes de 441 samples font 5 trames, pas 0 : c'est le report
+  du reste qui est vérifié, pas seulement la division) ;
+- `$32/$12/$22` lus sur la voie 2 ressortent en `$30/$10/$20`, et retombent sur
+  `$34/$14/$24` **après l'addition faite par le driver** ;
+- une fenêtre qui démarre au milieu d'une note réémet l'état de la voie en tête,
+  key-on écrit en dernier ;
+- un aller-retour par `codegen.to_asm` puis `importer.parse_asm_sound` redonne
+  les mêmes commandes — c'est ce test qui attrape une erreur de rebasage ;
+- un délai de plus de 255 trames est scindé **sans perdre de temps total**.
+
+Trois tests de `test_server_vgm.py` gardent la contrainte de non-régression :
+l'analyse audio en place, la banque et le rendu de l'onglet Créer survivent tous
+à un import VGM, alors que l'état du serveur est global.
 
 **Limite mesurée du mode mélodique** : au-delà d'environ 45 cents de vibrato,
 une note couvre plus d'un demi-ton et devient réellement ambiguë — aucun
@@ -409,6 +493,8 @@ to8sfx/
   bank.py         la banque : JSON <-> soundFX.asm + soundFX.const.asm
   melody.py       decoupage en notes et en attaques, accordage, gammes, re-attaque
   instruments.py  appariement spectral, Viterbi d'entrelacement, fit du patch custom
+  vgm.py          relecture d'un export VGM (DefleMask) -> commandes
+                  (trois conversions : samples->ticks, registre->base, 9 voies->1)
   codegen.py      trames -> commandes (deduplication/RLE) -> assembleur
   importer.py     relecture d'un bloc existant, ecriture wav
   server.py       interface web locale (stdlib)
