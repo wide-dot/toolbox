@@ -5,6 +5,8 @@
     ./cli.py create --category explosion --seed 42 -o son.asm  tirer un bruitage au sort
     ./cli.py bank banque.json --out-dir build/                 generer la banque (2 fichiers .asm)
     ./cli.py wav laser.wav --name Laser                   depuis un fichier audio
+    ./cli.py vgm bruit.vgm --survey                       inventaire des voies d'un export VGM
+    ./cli.py vgm bruit.vgm --from-channel 2 --name Laser  transcrire une voie
     ./cli.py import <soundFX.asm> <label>                 relire un son existant
 """
 
@@ -15,7 +17,7 @@ import os
 import sys
 
 from to8sfx import analyze as an
-from to8sfx import codegen, importer, instruments, melody, opll
+from to8sfx import codegen, importer, instruments, melody, opll, rhythm, vgm
 
 
 def _emit(args, frames, source_label, envelope=None):
@@ -156,6 +158,84 @@ def cmd_wav(args):
     _emit(args, frames, args.input, envelope)
 
 
+def _print_survey(args, v, voies):
+    print(f"{os.path.basename(args.input)} : {v.n_ticks} ticks "
+          f"({v.seconds:.2f} s), horloge {v.clock} Hz")
+    if v.has_rhythm:
+        print("  section RYTHME active : ces ecritures ne sont pas transcrites, "
+              "et les voies 6 a 8 sont muettes.")
+    if not voies:
+        print("  aucune voie melodique n'ecrit dans ce fichier.")
+    for c in voies:
+        noms = ", ".join(opll.INSTRUMENTS.get(i, "?") for i in c.instruments)
+        custom = "  [instrument CUSTOM]" if c.uses_custom else ""
+        print(f"  voie {c.channel} : {c.writes} ecritures, "
+              f"ticks {c.first_tick}-{c.last_tick}, {noms}{custom}")
+
+
+def cmd_vgm(args):
+    """Transcrit une voie d'un export VGM (DefleMask) en bloc soundFX.
+
+    `--from-channel` est la voie DANS le VGM, `--channel` la voie YM2413 de
+    sortie qui part dans l'en-tete du bloc — le meme sens que pour les autres
+    sous-commandes.
+    """
+    try:
+        v = vgm.parse(open(args.input, "rb").read())
+    except (ValueError, OSError) as e:
+        sys.exit(str(e))
+
+    voies = vgm.survey(v)
+    if args.survey:
+        _print_survey(args, v, voies)
+        return
+    if args.from_channel is None:
+        _print_survey(args, v, voies)
+        sys.exit("preciser la voie a transcrire avec --from-channel N "
+                 "(voir l'inventaire ci-dessus).")
+
+    try:
+        rhythm.check_any_channel(args.channel)
+    except ValueError as e:
+        sys.exit(str(e))
+
+    t0 = args.from_frame
+    t1 = v.n_ticks if args.to_frame is None else args.to_frame
+    if t1 <= t0:
+        sys.exit(f"fenetre vide (ticks {t0} a {t1}) : elargir la selection.")
+
+    cmds, avis = vgm.to_commands(v, args.from_channel, t0, t1)
+    for a in avis:
+        print(f"  ! {a}", file=sys.stderr)
+    if not cmds:
+        sys.exit(f"voie {args.from_channel} : rien a transcrire entre les ticks "
+                 f"{t0} et {t1}. Lancer --survey pour voir les voies actives.")
+
+    st = codegen.stats(cmds)
+    source = (f"{os.path.basename(args.input)}, voie {args.from_channel}, "
+              f"ticks {t0}-{t1}")
+    asm = codegen.to_asm(args.name, args.channel, cmds, priority=args.priority,
+                         source=source)
+    if args.out:
+        with open(args.out, "w") as fh:
+            fh.write(asm)
+        print(f"ecrit : {args.out}")
+    else:
+        print(asm)
+
+    print(f"  {st['commands']} commandes / {codegen.MAX_COMMANDS}, "
+          f"{st['bytes']} octets, {st['seconds']:.2f} s, voie {args.channel}",
+          file=sys.stderr)
+    if st["over_budget"]:
+        print("  DEPASSE le budget : l'en-tete compte les commandes sur un seul "
+              "octet. Resserrer --from-frame/--to-frame.", file=sys.stderr)
+
+    if args.wav:
+        ev, n = codegen.commands_to_events(cmds, args.channel)
+        importer.write_wav(args.wav, opll.render(ev, n))
+        print(f"preview : {args.wav}", file=sys.stderr)
+
+
 def cmd_import(args):
     text = open(args.source).read()
     channel, cmds = importer.parse_asm_sound(text, args.label)
@@ -230,6 +310,24 @@ def main():
     p.add_argument("--interleave", action="store_true")
     p.add_argument("--switch-penalty", type=float, default=0.8, dest="switch_penalty")
     p.set_defaults(func=cmd_wav)
+
+    p = sub.add_parser("vgm", help="depuis un export VGM (DefleMask, YM2413)")
+    p.add_argument("input", help="fichier .vgm ou .vgz")
+    p.add_argument("--survey", action="store_true",
+                   help="n'imprimer que l'inventaire des voies, sans rien generer")
+    p.add_argument("--from-channel", type=int, default=None, dest="from_channel",
+                   help="voie a transcrire DANS le VGM (0 a 8)")
+    p.add_argument("--from-frame", type=int, default=0, dest="from_frame",
+                   help="debut de la fenetre, en ticks de 20 ms")
+    p.add_argument("--to-frame", type=int, default=None, dest="to_frame",
+                   help="fin de la fenetre, en ticks (defaut : la fin du fichier)")
+    p.add_argument("--name", default="VgmSound")
+    p.add_argument("--channel", type=int, default=4,
+                   help="voie YM2413 de SORTIE, celle qui part dans l'en-tete")
+    p.add_argument("--priority", type=int, default=1)
+    p.add_argument("-o", "--out")
+    p.add_argument("--wav", help="ecrire aussi un rendu du bloc genere")
+    p.set_defaults(func=cmd_vgm)
 
     p = sub.add_parser("import", help="relire un bloc soundFX existant")
     p.add_argument("source")
