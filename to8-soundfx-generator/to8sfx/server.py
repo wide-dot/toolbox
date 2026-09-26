@@ -20,7 +20,7 @@ import numpy as np
 from . import analyze as an
 from . import bank as bank_mod
 from . import rhythm
-from . import codegen, design, importer, instruments, melody, opll
+from . import codegen, design, importer, instruments, melody, opll, vgm
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC = os.path.join(ROOT, "static")
@@ -34,6 +34,10 @@ STATE: dict = {
     "counter": 0,
     "variant_wavs": [],
     "bank": None,
+    # L'onglet VGM a son propre emplacement : partager celui de l'analyse
+    # audio ferait perdre son fichier a l'onglet Fichier audio, sans rien dire.
+    "vgm": None,
+    "vgm_name": "",
 }
 LOCK = threading.Lock()
 
@@ -454,6 +458,85 @@ def _bank_settings(params: dict) -> dict:
     return _bank_view()
 
 
+def _vgm_upload(data: bytes, name: str) -> dict:
+    """Charge un export VGM et rend l'inventaire de ses voies.
+
+    Ne touche a rien d'autre dans STATE : l'onglet Fichier audio garde son
+    fichier et son analyse, l'onglet Creer garde sa banque.
+    """
+    v = vgm.parse(data)
+    avis: list[str] = []
+    if v.has_rhythm:
+        avis.append(
+            "ce VGM emploie la section rythme du YM2413 ; ces ecritures ne sont "
+            "pas transcrites. Les voies 6, 7 et 8 y sont par ailleurs muettes.")
+    if v.clock != opll.YM2413_CLOCK:
+        avis.append(
+            f"horloge annoncee {v.clock} Hz, alors que le driver du TO8 tourne a "
+            f"{opll.YM2413_CLOCK} Hz. Les hauteurs seront transposees d'autant : "
+            "les F-Number sont recopies tels quels, pas reaccordes.")
+    voies = vgm.survey(v)
+    if not voies:
+        avis.append("aucune voie melodique n'ecrit dans ce VGM.")
+
+    with LOCK:
+        STATE["vgm"] = v
+        STATE["vgm_name"] = name
+    return {
+        "name": name,
+        "n_ticks": v.n_ticks,
+        "seconds": round(v.seconds, 2),
+        "clock": v.clock,
+        "has_rhythm": v.has_rhythm,
+        "channels": [c.to_dict() for c in voies],
+        "warnings": avis,
+    }
+
+
+def _vgm_render(params: dict) -> dict:
+    """Transcrit la fenetre choisie d'une voie, et la rend audible.
+
+    Meme chemin que _listen pour le preview : commandes -> commands_to_events ->
+    opll.render. Ce qu'on entend est donc ce que la puce recevra, pas une
+    idealisation.
+    """
+    v = STATE["vgm"]
+    if v is None:
+        raise ValueError("aucun fichier VGM charge : deposer un .vgm ou un .vgz.")
+
+    src = int(params.get("src_channel", 0))
+    out_ch = int(params.get("out_channel", 4))
+    rhythm.check_any_channel(out_ch)  # la voie part telle quelle dans l'en-tete
+    t0 = max(0, int(params.get("start_frame", 0)))
+    t1 = int(params.get("end_frame", v.n_ticks))
+    if t1 <= t0:
+        raise ValueError(
+            f"fenetre vide (ticks {t0} a {t1}) : elargir la selection.")
+
+    cmds, avis = vgm.to_commands(v, src, t0, t1)
+    if not cmds:
+        raise ValueError(" ".join(avis) or "rien a transcrire dans cette fenetre.")
+
+    st = codegen.stats(cmds)
+    nom = params.get("name") or "VgmSound"
+    source = f"{STATE['vgm_name']}, voie {src}, ticks {t0}-{t1}"
+    asm = codegen.to_asm(nom, out_ch, cmds, priority=int(params.get("priority", 1)),
+                         source=source)
+
+    ev, nsamples = codegen.commands_to_events(cmds, out_ch)
+    with LOCK:
+        STATE["counter"] += 1
+        STATE["preview_wav"] = importer.wav_bytes(opll.render(ev, nsamples))
+    return {
+        "asm": asm,
+        "stats": st,
+        "trace": vgm.trace(v, src, t0, t1),
+        "warnings": avis,
+        "source": source,
+        "preview": f"/api/preview.wav?t={STATE['counter']}",
+    }
+
+
 def _listen(params: dict) -> dict:
     """Rejoue un bloc soundFX deja ecrit, colle tel quel.
 
@@ -584,6 +667,13 @@ class Handler(BaseHTTPRequestHandler):
                     "voiced": [bool(v) for v in a.voiced.tolist()],
                     "source": "/api/source.wav",
                 })
+
+            if path == "/api/vgm/upload":
+                fname = self.headers.get("X-Filename", "export.vgm")
+                return self._json(_vgm_upload(body, fname))
+
+            if path == "/api/vgm/render":
+                return self._json(_vgm_render(json.loads(body or b"{}")))
 
             if path == "/api/generate":
                 params = json.loads(body or b"{}")
