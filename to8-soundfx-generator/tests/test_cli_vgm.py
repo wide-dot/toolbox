@@ -8,6 +8,7 @@ attrape pas.
 
 import io
 import os
+import re
 import sys
 import tempfile
 from contextlib import redirect_stderr, redirect_stdout
@@ -103,19 +104,40 @@ def test_the_subcommand_writes_a_block_for_the_chosen_channel():
 
 
 def test_the_window_options_shorten_the_block():
+    """On compare deux fenetres du MEME fichier : une assertion sur la seule
+    fenetre courte passerait quelle que soit la valeur de --to-frame.
+
+    La duree se lit dans l'en-tete de commentaire et non dans les delais relus :
+    `to_asm` omet volontairement le dernier octet de delai, que le driver ne lit
+    jamais (il s'arrete sur le compteur de commandes avant), donc un aller-retour
+    par l'assembleur perd toujours le dernier delai.
+    """
     src = _vgm_file()
-    dst = tempfile.mktemp(suffix=".asm")
+    courts, longs = tempfile.mktemp(suffix=".asm"), tempfile.mktemp(suffix=".asm")
     try:
         _run(["vgm", src, "--from-channel", "1", "--name", "Court",
-              "--from-frame", "0", "--to-frame", "5", "-o", dst])
-        asm = open(dst).read()
+              "--from-frame", "0", "--to-frame", "5", "-o", courts])
+        _run(["vgm", src, "--from-channel", "1", "--name", "Long",
+              "--from-frame", "0", "--to-frame", "25", "-o", longs])
+        a, b = open(courts).read(), open(longs).read()
     finally:
-        os.unlink(src)
-        if os.path.exists(dst):
-            os.unlink(dst)
-    _voie, cmds = importer.parse_asm_sound(asm, "soundFX.Court.data")
-    assert sum(c.delay for c in cmds) <= 5, [c.delay for c in cmds]
-    print(f"  fenetre 0-5 : {sum(c.delay for c in cmds)} ticks")
+        for f in (src, courts, longs):
+            if os.path.exists(f):
+                os.unlink(f)
+
+    def duree(asm):
+        m = re.search(r"; \d+ commandes, \d+ octets, ([\d.]+) s", asm)
+        assert m, f"duree absente de l'en-tete :\n{asm[:200]}"
+        return float(m.group(1))
+
+    assert duree(a) == 0.10, duree(a)   # 5 trames de 20 ms
+    assert duree(b) == 0.50, duree(b)   # 25 trames
+    # et la fenetre courte porte bien moins de commandes ou autant, jamais plus
+    _v1, c1 = importer.parse_asm_sound(a, "soundFX.Court.data")
+    _v2, c2 = importer.parse_asm_sound(b, "soundFX.Long.data")
+    assert len(c1) <= len(c2), (len(c1), len(c2))
+    print(f"  fenetre 0-5 : {duree(a):.2f} s / {len(c1)} cmd ; "
+          f"0-25 : {duree(b):.2f} s / {len(c2)} cmd")
 
 
 def test_a_preview_wav_can_be_written():
