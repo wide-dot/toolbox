@@ -537,6 +537,19 @@ def _vgm_render(params: dict) -> dict:
     }
 
 
+def _vgm_trace(params: dict) -> dict:
+    """Etat de la voie sur TOUT le fichier, pour que l'interface la dessine.
+
+    Separe de _vgm_render a dessein : la fenetre bouge a chaque mouvement de
+    souris, alors que cette trace-la ne change qu'au changement de voie.
+    """
+    v = STATE["vgm"]
+    if v is None:
+        raise ValueError("aucun fichier VGM charge : deposer un .vgm ou un .vgz.")
+    return {"trace": vgm.trace(v, int(params.get("src_channel", 0)), 0, v.n_ticks),
+            "n_ticks": v.n_ticks}
+
+
 def _listen(params: dict) -> dict:
     """Rejoue un bloc soundFX deja ecrit, colle tel quel.
 
@@ -674,6 +687,9 @@ class Handler(BaseHTTPRequestHandler):
 
             if path == "/api/vgm/render":
                 return self._json(_vgm_render(json.loads(body or b"{}")))
+
+            if path == "/api/vgm/trace":
+                return self._json(_vgm_trace(json.loads(body or b"{}")))
 
             if path == "/api/generate":
                 params = json.loads(body or b"{}")

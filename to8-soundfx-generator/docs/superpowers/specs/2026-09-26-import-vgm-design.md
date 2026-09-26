@@ -177,7 +177,16 @@ court.)
 - `$00-$07` change pendant la fenêtre ;
 - la voie choisie n'a aucune écriture dans la fenêtre.
 
-### Serveur — deux points d'entrée
+### Serveur — trois points d'entrée
+
+> **Écart assumé par rapport au plan initial (deux points d'entrée).** Un
+> troisième, `/api/vgm/trace`, s'est révélé nécessaire à l'implémentation :
+> l'interface doit dessiner **toute** la voie pour qu'on puisse y découper une
+> fenêtre. La faire renvoyer par `/api/vgm/render` réexpédierait le fichier
+> entier à chaque mouvement de souris ; la faire renvoyer par
+> `/api/vgm/upload` obligerait à envoyer les neuf voies alors qu'une seule est
+> regardée. Elle ne change qu'au changement de voie : c'est donc son propre
+> point d'entrée.
 
 Sur le modèle exact de `_listen`, qui fait déjà commandes → `stats` →
 `commands_to_events` → `opll.render` → `importer.wav_bytes` → URL de preview.
@@ -186,6 +195,8 @@ Sur le modèle exact de `_listen`, qui fait déjà commandes → `stats` →
   clock, channels[], warnings}`. Stocké dans `STATE["vgm"]`.
 - `POST /api/vgm/render` — `{src_channel, start_frame, end_frame, out_channel,
   name}`. Retourne `{asm, stats, preview, trace, warnings}`.
+- `POST /api/vgm/trace` — `{src_channel}`. Retourne la trace de la voie sur
+  tout le fichier, pour le tracé de sélection.
 
 `trace` porte, par tick, hauteur en Hz / volume / key-on de la voie choisie,
 reconstruits par relecture d'état. C'est ce qui permet de **voir** la voie avant

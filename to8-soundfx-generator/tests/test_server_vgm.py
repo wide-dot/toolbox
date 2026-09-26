@@ -184,3 +184,32 @@ def test_the_create_tab_still_renders_after_a_vgm_import():
     assert out["stats"]["commands"] > 0
     assert "soundFX.Laser2.data" in out["asm"]
     print(f"  onglet Creer toujours fonctionnel : {out['stats']['commands']} commandes")
+
+
+# --- Trace complete d'une voie ----------------------------------------------
+#
+# Ecart assume par rapport a la spec, qui ne prevoyait que deux points d'entree.
+# L'interface doit dessiner TOUTE la voie pour qu'on puisse y decouper une
+# fenetre ; la faire renvoyer par /api/vgm/render reexpedierait le fichier
+# entier a chaque mouvement de souris, et la faire renvoyer par /api/vgm/upload
+# obligerait a envoyer les neuf voies alors qu'une seule est regardee.
+
+
+def test_trace_covers_the_whole_channel():
+    _upload()
+    out = server._vgm_trace({"src_channel": 1})
+    assert len(out["trace"]) == 40, len(out["trace"])
+    assert out["trace"][0]["on"], out["trace"][0]
+    assert out["trace"][0]["hz"] > 0
+    print(f"  trace complete : {len(out['trace'])} ticks")
+
+
+def test_trace_without_an_upload_says_so():
+    server.STATE["vgm"] = None
+    try:
+        server._vgm_trace({"src_channel": 0})
+    except ValueError as e:
+        assert "vgm" in str(e).lower(), e
+        print(f"  trace sans fichier refusee : {e}")
+        return
+    raise AssertionError("une trace sans fichier charge a ete acceptee")
